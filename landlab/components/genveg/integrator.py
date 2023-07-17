@@ -311,10 +311,8 @@ class GenVeg(Component, PlantGrowth):
             return None
         else:
             return min(intersection_points), max(intersection_points)
-
     def check_if_loc_unocc(self, plant_loc, plant_width, all_plants, check_type):
         plants_with_locations = all_plants[~np.isnan(all_plants["x_loc"])]
-
         # This code looks for the cells around the plant cell_index
         #    parent_cell=new_pups['cell_index']
         #    query_cells=self._grid.looped_neighbors_at_cell[pup['cell_index']]
@@ -336,13 +334,48 @@ class GenVeg(Component, PlantGrowth):
             is_center_unocc.append(np.all(no_conflict))
         return is_center_unocc
 
+    def check_if_loc_unocc2(self, plant_loc, plant_width, all_plants, check_type):
+        #plants_with_locations = all_plants[~np.isnan(all_plants["x_loc"])]
+        # This code looks for the cells around the plant cell_index
+        #    parent_cell=new_pups['cell_index']
+        #    query_cells=self._grid.looped_neighbors_at_cell[pup['cell_index']]
+        #    query_cells.append(parent_cell)
+        #    plants_to_check=all_plants[np.isin(new_pups['cell_index'], query_cells)]
+        # check to see if we can vectorize this method
+        # We can also downselect so we are only checking plants in the surrounding cells
+        area = {"above": "shoot_sys_width", "below": "root_sys_width"}
+        is_center_unocc = []
+        for idx, loc in enumerate(plant_loc):
+            # ER Additions start 7/7/23
+            # Finds node nearest to plant loc and then cell that contains that node
+            plant_node = self._grid.find_nearest_node([loc[0], loc[1]])
+            plant_cell = self._grid.cell_at_node[plant_node]
+            # Concatenates list of D8 neighborhood nodes and finds cell that contains those nodes
+            neighborhood_nodes = np.concatenate([self._grid.adjacent_nodes_at_node[plant_node], self._grid.diagonal_adjacent_nodes_at_node[plant_node]])
+            neighborhood_cells = self._grid.cell_at_node[neighborhood_nodes[neighborhood_nodes!=-1]]
+            # Gets list of cell index to subset all_plants dataframe 
+            # i.e., is only searching the D8 cells (including cell with current plant)
+            cell_index_subset = np.concatenate([[plant_cell], neighborhood_cells[neighborhood_cells!=-1]])
+            plants_with_locations = all_plants[np.isin(all_plants["cell_index"], cell_index_subset)]
+            # ER additions end 7/7/23
+            distance = (
+                np.sqrt(
+                    (loc[0] - plants_with_locations["x_loc"]) ** 2
+                    + (loc[1] - plants_with_locations["y_loc"]) ** 2
+                )
+                - plant_width[idx] / 2
+            )
+            no_conflict = distance > plants_with_locations[area[check_type]] / 2
+            is_center_unocc.append(np.all(no_conflict))
+        return is_center_unocc
+
     def check_for_dispersal_success(self, all_plants):
         new_pups = all_plants[~np.isnan(all_plants["pup_x_loc"])]
 
         if new_pups.size != 0:
             pup_locs = tuple(zip(new_pups["pup_x_loc"], new_pups["pup_y_loc"]))
             pup_widths = np.zeros_like(new_pups["pup_x_loc"])
-            loc_unoccupied = self.check_if_loc_unocc(
+            loc_unoccupied = self.check_if_loc_unocc2(
                 pup_locs, pup_widths, all_plants, "below"
             )
             # print("There were " + str(new_pups.size) + " potential new plants")
