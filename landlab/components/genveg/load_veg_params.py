@@ -29,7 +29,7 @@ class VegParams:
     outfile: optional input to allow for custom file name
     """
 
-    def __init__(self, fpath="None", outfile="veg_params.yml", vegparams={}):
+    def __init__(self, processes=None, fpath="None", outfile="veg_params.yml", vegparams={}):
         if fpath == "None":
             self.veg_params = {
                 "Corn": {

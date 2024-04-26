@@ -7,23 +7,28 @@ class Photosynthesis(object):
         latitude,
         _current_day=0,
         _CO2_atmos=245,
-        photo_params={
-            "vcmax": 200,
-            "kc": 300,
-            "ko": 300000,
-            "ci": 245,
-            "co": 210000,
-            "spec_factor_25": 2600.0,
-            "stomatal_conductance": 1000000000,
-        },
-        gauss_integration_params=[
-            (0.0469101, 0.1184635),
-            (0.2307534, 0.2393144),
-            (0.5000000, 0.2844444),
-            (0.7692465, 0.2393144),
-            (0.9530899, 0.1184635),
-        ],
+        photo_params=None,
+        gauss_integration_params=None,
     ):
+        if photo_params is None:
+            photo_params = {
+                "vcmax": 200,
+                "kc": 300,
+                "ko": 300000,
+                "ci": 245,
+                "co": 210000,
+                "spec_factor_25": 2600.0,
+                "stomatal_conductance": 1000000000,
+            }
+        if gauss_integration_params is None:
+            gauss_integration_params = [
+                (0.0469101, 0.1184635),
+                (0.2307534, 0.2393144),
+                (0.5000000, 0.2844444),
+                (0.7692465, 0.2393144),
+                (0.9530899, 0.1184635),
+            ]
+
         self.latitude = latitude
         self._solar_declination = 0.0
         self._sunrise = 0.0
@@ -337,15 +342,17 @@ class C3(Photosynthesis):
     def __init__(
         self,
         latitude,
-        photo_params={
-            "vcmax": 200,
-            "kc": 300,
-            "ko": 300000,
-            "ci": 245,
-            "co": 210000,
-            "spec_factor_base": 2600.0,
-        },
+        photo_params=None
     ):
+        if photo_params is None:
+            photo_params = {
+                "vcmax": 200,
+                "kc": 300,
+                "ko": 300000,
+                "ci": 245,
+                "co": 210000,
+                "spec_factor_base": 2600.0,
+            }
         super().__init__(latitude, photo_params=photo_params)
 
 
@@ -354,16 +361,18 @@ class C4(Photosynthesis):
         self,
         latitude,
         _CO2_atmos=400,
-        photo_params={
-            "vcmax": 200,
-            "kc": 300,
-            "ko": 300000,
-            "ci": 245,
-            "co": 210000,
-            "spec_factor_base": 2600.0,
-            "stomatal_conductance": 0.5,
-        },
+        photo_params=None
     ):
+        if photo_params is None:
+            photo_params = {
+                "vcmax": 200,
+                "kc": 300,
+                "ko": 300000,
+                "ci": 245,
+                "co": 210000,
+                "spec_factor_base": 2600.0,
+                "stomatal_conductance": 0.5,
+            }
         super().__init__(latitude, _CO2_atmos=_CO2_atmos, photo_params=photo_params)
         # This will be updated with C4 changes
 
