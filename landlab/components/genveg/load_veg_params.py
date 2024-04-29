@@ -6,6 +6,7 @@ Want to retain formatted Excel file due to type of data required
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import pathlib
 import yaml
 from scipy.optimize import curve_fit
@@ -381,6 +382,7 @@ class VegParams:
                         # Calculate sigmoid mortality curves
                         sigmoid_coeffs = {}
                         for descriptor in nested_dict["mortality_params"]["response"]:
+                            print(descriptor)
                             response = np.array(
                                 nested_dict["mortality_params"]["response"][descriptor]
                             )
@@ -389,14 +391,23 @@ class VegParams:
                             )
                             response = response[response != -9999]
                             predictor = predictor[predictor != -9999]
+                            plot_info = {
+                                'species': nested_dict["plant_factors"]["species"],
+                                'var-name': nested_dict["mortality_params"]["mort_variable_name"][descriptor],
+                                'period': nested_dict["mortality_params"]["period"][descriptor],
+                            }
                             sigmoid_coeffs[descriptor] = self._build_logistic(
-                                predictor, response, fit_method="dogbox"
+                                predictor,
+                                response,
+                                plot_info=plot_info,
+                                fit_method="dogbox"
                             ).tolist()
                         nested_dict["mortality_params"]["coeffs"] = sigmoid_coeffs
                         # Add species nested dictionary to master parameter dictionary
                         param_dict[nested_dict["plant_factors"]["species"]] = (
                             nested_dict
                         )
+                        print(nested_dict)
                 else:
                     if exten == "csv":
                         # Add Carra's code here and load into dict called x
@@ -411,7 +422,7 @@ class VegParams:
 
     # Private method to build logistic mortality
     # function for up to five acute mortality factors
-    def _build_logistic(self, xs, ys, fit_method):
+    def _build_logistic(self, xs, ys, plot_info, fit_method):
         if len(xs) != len(ys):
             msg = "Predictor and response variable arrays must be same length"
             raise ValueError(msg)
@@ -438,11 +449,11 @@ class VegParams:
             S = [guess["a"], guess["b"]]
         # Use scipy solver to estimate sigmoid coefficients
         else:
-            S = self._get_general_s_curve(uni_xs, uni_ys, fit_method=fit_method)
+            S = self._get_general_s_curve(uni_xs, uni_ys, plot_info=plot_info, fit_method=fit_method)
 
         return S
 
-    def _get_general_s_curve(self, uni_xs, uni_ys, fit_method):
+    def _get_general_s_curve(self, uni_xs, uni_ys, plot_info, fit_method):
         """
         This function yeilds a general S curve based on the _cfunc method. It
         utilizes uni_xs, and uni_ys values. This method will utilizes SciPy's curve_fit
@@ -458,6 +469,7 @@ class VegParams:
         idx_05, idx_limit = self.find_index_values(uni_xs=uni_xs, uni_ys=uni_ys)
         # check to see if they are the same point
         if idx_05 != idx_limit:
+            print('\nI AM GOING TO USE curve_fit\n')
             # get x and y coordinates
             x = [uni_xs[min(idx_05, idx_limit)], uni_xs[max(idx_05, idx_limit)]]
             y = [uni_ys[min(idx_05, idx_limit)], uni_ys[max(idx_05, idx_limit)]]
@@ -476,9 +488,33 @@ class VegParams:
             )
         # goes to TAM method to make the curve
         else:
+            print('\nI AM GOING TO MAKE A TAM CURVE\n')
             S = self._TAM_method(uni_xs=uni_xs, uni_ys=uni_ys, method=fit_method)
-
+        self.plot_mortality_curve(uni_xs=uni_xs, uni_ys=uni_ys, plot_coeff=S, plot_info=plot_info)
         return S
+    
+    def plot_mortality_curve(self, uni_xs, uni_ys, plot_coeff, plot_info):
+        smooth_x = np.linspace(uni_xs.min(), uni_xs.max(), 100)
+        estimated_y = self._cfunc(smooth_x, plot_coeff[0], plot_coeff[1])
+        mse = self._mse(uni_xs, uni_ys, coeffs=plot_coeff)
+        plt.plot(
+            smooth_x,
+            estimated_y,
+        )
+        plt.plot(
+            uni_xs,
+            uni_ys,
+            'o'
+        )
+        plt.legend(
+            [
+                f'curve fit - mes={mse:1.2e}',
+                'data'
+            ]
+        )
+        plt.title(f'{plot_info["species"]} - {plot_info["period"]}')
+        plt.xlabel(plot_info["var-name"])
+        plt.show()
 
     def _mse(self, x, y, coeffs):
         # currently this is not used but will be when we produce the graphs and show
