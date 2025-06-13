@@ -146,87 +146,83 @@ class Species:
         # Area of circle calcuations
         # check for negative values
         for m_params in [
-            "max_shoot_sys_width",
-            "min_shoot_sys_width",
-            "max_root_sys_width",
-            "min_root_sys_width",
+            "shoot_sys_width",
+            "root_sys_width",
         ]:
-            UnitTestChecks().is_negative_present(morph_params[m_params], m_params)
-        species_params["morph_params"]["max_crown_area"] = self.calc_area_of_circle(
-            diameter=morph_params["max_shoot_sys_width"]
+            for val in [
+                "max",
+                "mean",
+                "min",
+            ]:
+                UnitTestChecks().is_negative_present(morph_params[m_params][val], val)
+        species_params["morph_params"]["canopy_area"] = {}
+        species_params["morph_params"]["canopy_area"]["max"] = self.calc_area_of_circle(
+            diameter=morph_params["shoot_sys_width"]["max"]
         )
-        species_params["morph_params"]["min_crown_area"] = self.calc_area_of_circle(
-            diameter=morph_params["min_shoot_sys_width"]
+        species_params["morph_params"]["canopy_area"]["mean"] = self.calc_area_of_circle(
+            diameter=morph_params["shoot_sys_width"]["mean"]
         )
-        species_params["morph_params"]["max_root_area"] = self.calc_area_of_circle(
-            diameter=morph_params["max_root_sys_width"]
+        species_params["morph_params"]["canopy_area"]["min"] = self.calc_area_of_circle(
+            diameter=morph_params["shoot_sys_width"]["min"]
         )
-        species_params["morph_params"]["min_root_area"] = self.calc_area_of_circle(
-            diameter=morph_params["min_root_sys_width"]
+        species_params["morph_params"]["root_area"] = {}
+        species_params["morph_params"]["root_area"]["max"] = self.calc_area_of_circle(
+            diameter=morph_params["root_sys_width"]["max"]
+        )
+        species_params["morph_params"]["root_area"]["mean"] = self.calc_area_of_circle(
+            diameter=morph_params["root_sys_width"]["mean"]
+        )
+        species_params["morph_params"]["root_area"]["min"] = self.calc_area_of_circle(
+            diameter=morph_params["root_sys_width"]["min"]
         )
 
         # volume of a cylinder
         # check for negative values
-        UnitTestChecks().is_negative_present(morph_params["max_height"], "max_height")
+        UnitTestChecks().is_negative_present(morph_params["height"]["max"], "max")
         UnitTestChecks().is_negative_present(
-            species_params["morph_params"]["max_crown_area"], "max_crown_area"
-        )
-        species_params["morph_params"]["max_vital_volume"] = self.calc_volume_cylinder(
-            area=species_params["morph_params"]["max_crown_area"],
-            height=species_params["morph_params"]["max_height"],
+            species_params["morph_params"]["canopy_area"]["max"], "max_canopy_area"
         )
 
         # ratio calculations
         # check if zero
         for denominator in [
-            "max_n_stems",
-            "min_shoot_sys_width",
-            "max_shoot_sys_width",
-            "min_basal_dia",
-            "max_basal_dia",
+            "n_stems",
+            "shoot_sys_width",
+            "basal_dia",
         ]:
-            UnitTestChecks().is_zero(morph_params[denominator], denominator)
+            for val in [
+                "max",
+                "mean",
+                "min",
+            ]:
+                UnitTestChecks().is_zero(morph_params[denominator][val], val)
         species_params["morph_params"]["area_per_stem"] = self.calc_param_ratio(
-            morph_params["max_crown_area"], morph_params["max_n_stems"]
-        )
-        species_params["morph_params"]["min_abg_aspect_ratio"] = self.calc_param_ratio(
-            morph_params["max_height"], morph_params["min_shoot_sys_width"]
-        )
-        species_params["morph_params"]["max_abg_aspect_ratio"] = self.calc_param_ratio(
-            morph_params["max_height"], morph_params["max_shoot_sys_width"]
-        )
-        species_params["morph_params"]["min_basal_ratio"] = self.calc_param_ratio(
-            morph_params["min_shoot_sys_width"], morph_params["min_basal_dia"]
-        )
-        species_params["morph_params"]["max_basal_ratio"] = self.calc_param_ratio(
-            morph_params["max_shoot_sys_width"], morph_params["max_basal_dia"]
+            morph_params["canopy_area"]["max"], morph_params["n_stems"]["max"]
         )
 
         sum_vars = [
-            ["max_total_biomass", "plant_part_max", self.all_parts],
-            ["max_growth_biomass", "plant_part_max", self.growth_parts],
-            ["max_abg_biomass", "plant_part_max", self.abg_parts],
-            ["min_total_biomass", "plant_part_min", self.all_parts],
-            ["min_growth_biomass", "plant_part_min", self.growth_parts],
-            ["min_abg_biomass", "plant_part_min", self.abg_parts],
+            ["total_biomass", "max", "plant_part_max", self.all_parts],
+            ["growth_biomass", "max", "plant_part_max", self.growth_parts],
+            ["abg_biomass", "max", "plant_part_max", self.abg_parts],
+            ["abg_biomass", "mean", "plant_part_mean", self.abg_parts],
+            ["total_biomass", "min", "plant_part_min", self.all_parts],
+            ["growth_biomass", "min", "plant_part_min", self.growth_parts],
+            ["abg_biomass", "min", "plant_part_min", self.abg_parts],
             [
-                "min_nsc_biomass",
+                "nsc_biomass",
+                "min",
                 "min_nsc_content",
                 self.growth_parts,
             ],  # this is dynamic and varying with plant size
         ]
         for sum_var in sum_vars:
-            species_params["grow_params"][sum_var[0]] = 0
-            for part in sum_var[2]:
-                species_params["grow_params"][sum_var[0]] += species_params[
+            species_params["grow_params"][sum_var[0]] = {}
+        for sum_var in sum_vars:
+            species_params["grow_params"][sum_var[0]][sum_var[1]] = 0
+            for part in sum_var[3]:
+                species_params["grow_params"][sum_var[0]][sum_var[1]] += species_params[
                     "grow_params"
-                ][sum_var[1]][part]
-
-        species_params["morph_params"]["biomass_packing"] = self.calc_param_ratio(
-            species_params["grow_params"]["max_growth_biomass"],
-            morph_params["max_vital_volume"],
-        )
-
+                ][sum_var[2]][part]
         seasonal_nsc_assim_rates = [
             "winter_nsc_rate",
             "spring_nsc_rate",
@@ -257,7 +253,6 @@ class Species:
                 species_params["duration_params"]["nsc_rate_change"][season][
                     part
                 ] = rate_change_nsc
-
         return species_params
 
     def calculate_lai(self, leaf_area, shoot_sys_width):
@@ -486,14 +481,12 @@ class Species:
                 ns_conc[part] - self.species_grow_params["min_nsc_content"][part]
             ) * np.ones_like(plants[part])
             avail_nsc_content[avail_nsc_content < 0] = 0.0
-
             available_stored_biomass += plants[part] * avail_nsc_content
             total_persistent_biomass += plants[part]
         plants = self.habit.duration.emerge(
             plants, available_stored_biomass, total_persistent_biomass
         )
         plants = self.update_morphology(plants)
-
         return plants
 
     def get_daily_nsc_concentration(self, _current_jday):
@@ -604,7 +597,6 @@ class Species:
     def calculate_whole_plant_mortality(self, plants, grid_value, key):
         mortdict = self.species_mort_params
         factor_coeffs = mortdict["coeffs"][key]
-        print(factor_coeffs)
         # Calculate the probability of survival and cap from 0-1
         prob_survival = 1 / (1 + np.exp(-factor_coeffs[0] * (grid_value - factor_coeffs[1])))
         prob_survival[np.isnan(prob_survival)] = 1.0
@@ -673,7 +665,7 @@ class Species:
 
     def respire(self, _min_temperature, _max_temperature, _rel_sat, _last_biomass):
         """
-        This function calculates maintenance respiration 
+        This function calculates maintenance respiration
         """
         _temperature = (_min_temperature + _max_temperature) / 2
         growdict = self.species_grow_params
@@ -692,7 +684,7 @@ class Species:
                 * hypoxia_adjustment[filter]
                 * growdict["respiration_coefficient"][part]
                 * _last_biomass[part][filter]
-                / growdict["glucose_requirement"][part] 
+                / growdict["glucose_requirement"][part]
             )
             _new_biomass[part][filter] -= delta_respire[filter]
         return _new_biomass
@@ -714,7 +706,7 @@ class Species:
         return plants
 
     def set_initial_biomass(self, plants, in_growing_season):
-        est_abg_biomass = self.habit.estimate_abg_biomass_from_morphology(plants)
+        est_abg_biomass = self.habit.estimate_abg_biomass_from_cover(plants)
         log_abg_biomass = np.log(
             est_abg_biomass,
             out=np.zeros_like(est_abg_biomass, dtype=np.float64),
@@ -735,7 +727,7 @@ class Species:
         )
         plants = self.habit.duration.set_initial_biomass(
             plants, in_growing_season
-        )  # what is this doing?
+        )
         return plants
 
     def set_new_biomass(self, plants):
@@ -743,37 +735,25 @@ class Species:
         return plants
 
     def update_morphology(self, plants):
+        # Right now this only tracks live biomass - should we track all?
+        # Assuming dead leaf area is 95% of live leaf area
         abg_biomass = self.sum_plant_parts(plants, parts="aboveground")
-        dead_abg_biomass = self.sum_plant_parts(plants, parts="dead_aboveground")
-        total_abg_biomass = abg_biomass + dead_abg_biomass
-        plants["basal_width"], plants["shoot_sys_width"], plants["shoot_sys_height"] = (
-            self.habit.calc_abg_dims_from_biomass(total_abg_biomass)
+        plants["basal_dia"], plants["shoot_sys_width"], plants["shoot_sys_height"] = (
+            self.habit.calc_abg_dims_from_biomass(abg_biomass)
         )
         plants["root_sys_width"] = self.habit.calc_root_sys_width(
-            plants["shoot_sys_width"], plants["basal_width"], plants["shoot_sys_height"]
+            plants["shoot_sys_width"], plants["basal_dia"], plants["shoot_sys_height"]
         )
-        dead_leaf_area = plants["total_leaf_area"] - plants["live_leaf_area"]
-        dead_leaf_area[dead_leaf_area < 0] = 0.0
-        filter = np.nonzero(dead_leaf_area > 0)
+        dead_leaf_area = np.zeros_like(plants["total_leaf_area"])
+        filter = np.nonzero(plants["dead_leaf"] > 0)
         plants["live_leaf_area"] = (
             plants["leaf"] * self.species_morph_params["sp_leaf_area"]
         )
-
-        cohort_dead_leaf_area = np.zeros_like(dead_leaf_area)
-        cohort_dead_leaf_area[filter] = dead_leaf_area[filter] / np.exp(
-            -self.species_morph_params["biomass_decay_rate"]["dead_leaf"]
-            * plants["dead_leaf_age"][filter]
-        )
-        dead_leaf_area_ratio = np.ones_like(plants["live_leaf_area"])
-        dead_leaf_area_ratio[filter] = (
-            dead_leaf_area[filter] / cohort_dead_leaf_area[filter]
-        )
-        plants["total_leaf_area"] = plants["live_leaf_area"] + (
-            plants["dead_leaf"]
+        dead_leaf_area[filter] = (
+            0.95 * plants["dead_leaf"][filter]
             * self.species_morph_params["sp_leaf_area"]
-            * dead_leaf_area_ratio
-            / 3
         )
+        plants["total_leaf_area"] = plants["live_leaf_area"] + dead_leaf_area
         return plants
 
     def update_dead_biomass(self, _new_biomass, old_biomass):

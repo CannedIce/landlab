@@ -80,6 +80,12 @@ def example_input_params():
                     "root": 4.3,
                     "stem": 4.1,
                 },
+                "plant_part_mean": {
+                    "leaf": 2.8,
+                    "reproductive": 1,
+                    "root": 3.1,
+                    "stem": 1.5,
+                },
                 "plant_part_min": {
                     "leaf": 0.03,
                     "reproductive": 0,
@@ -99,38 +105,63 @@ def example_input_params():
             },
             "morph_params": {
                 "allometry_method": "min-max",
-                "basal_coeffs": {
-                    "a": -9999,
-                    "b": -9999,
-                },
                 "biomass_decay_rate": {
                     "dead_leaf": 0.07,
                     "dead_reproductive": 0.07,
                     "dead_root": 0.07,
                     "dead_stem": 0.07,
                 },
-                "canopy_coeffs": {
-                    "a": -9999,
-                    "b": -9999,
-                    "c": -9999,
-                },
-                "height_coeffs": {
-                    "a": -9999,
-                    "b": -9999,
+                "empirical_coeffs": {
+                    "basal_dia_coeffs": {
+                        "a": -9999,
+                        "b": -9999,
+                    },
+                    "canopy_area_coeffs": {
+                        "a": -9999,
+                        "b": -9999,
+                        "c": -9999,
+                    },
+                    "height_coeffs": {
+                        "a": -9999,
+                        "b": -9999,
+                    },
+                    "root_dia_coeffs": {
+                        "a": -9999,
+                        "b": -9999,
+                    },
                 },
                 "lai_cr": 2,
-                "max_height": 0.75,
-                "max_n_stems": 10,
+                "height": {
+                    "max": np.array([0.931]),
+                    "mean": np.array([0.8]),
+                    "min": np.array([0.16]),
+                },
+                "n_stems": {
+                    "max": 10,
+                    "mean": 3,
+                    "min": 1,
+                },
                 "max_plant_density": 18,
-                "max_root_sys_depth": 0.33,
-                "max_root_sys_width": 0.35,
-                "max_shoot_sys_width": 0.3,
-                "max_basal_dia": 0.1,
-                "min_height": 0.075,
-                "min_root_sys_depth": 0.02,
-                "min_root_sys_width": 0.01,
-                "min_shoot_sys_width": 0.01,
-                "min_basal_dia": 0.005423267786434878,
+                "shoot_sys_width": {
+                    "max": np.array([0.3]),
+                    "mean": np.array([0.12]),
+                    "min": np.array([0.01]),
+                },
+                "basal_dia": {
+                    "max": np.array([0.1]),
+                    "mean": np.array([0.07]),
+                    "min": np.array([0.005]),
+                },
+                "root_depth": {
+                    "max": np.array([1.45]),
+                    "mean": np.array([0.8]),
+                    "min": np.array([0.01]),
+                },
+                "root_sys_width": {
+                    "max": np.array([2]),
+                    "mean": np.array([0.2]),
+                    "min": np.array([0.01]),
+                },
                 "sp_leaf_area": 0.0074,
             },
             "mortality_params": {
@@ -293,7 +324,7 @@ def example_plant_array(set_random_seed):
         ("dead_stem_age", float),
         ("dead_reproductive_age", float),
         ("shoot_sys_width", float),
-        ("basal_width", float),
+        ("basal_dia", float),
         ("root_sys_width", float),
         ("shoot_sys_height", float),
         ("root_sys_depth", float),
@@ -356,17 +387,21 @@ def example_plant_array(set_random_seed):
     plants["dead_stem"] = plants["stem"] * 0.25
     plants["dead_leaf"] = plants["leaf"] * 0.25
     plants["dead_reproductive"] = plants["reproductive"] * 0.25
-    # ran rng.uniform(low=0, high=365*4, size=4) to gain the four below so i can unit test
+    # ran rng.uniform(low=0, high=260, size=4) to gain the four below so i can unit test
     plants["dead_root_age"] = np.array([1094.035397, 267.2368885, 382.4262438, 347.6774074, 1017.381215, 911.6529431, 314.3525663, 982.1220087])
     plants["dead_leaf_age"] = np.array([1329.561664, 1352.338509, 1238.787392, 1433.019734, 1348.797247, 735.8478796, 1177.379645, 234.6844825])
     plants["dead_stem_age"] = np.array([1315.902291, 1453.913069, 688.1424854, 329.2440673, 1362.62031, 457.1701171, 1377.041709, 1364.471028])
     plants["dead_reproductive_age"] = np.array([507.8777074, 1121.713079, 204.4386012, 1073.25249, 660.3439315, 426.4383309, 1261.53064, 1085.549562])
+    # plants["dead_root_age"] = rng.uniform(low=0, high=(365 * 2), size=plants.size)
+    # plants["dead_leaf_age"] = rng.uniform(low=0, high=290, size=plants.size)
+    # plants["dead_stem_age"] = rng.uniform(low=0, high=290, size=plants.size)
+    # plants["dead_reproductive_age"] = rng.uniform(low=0, high=365, size=plants.size)
     plants["shoot_sys_width"] = rng.uniform(low=0.1, high=3, size=plants.size)
-    plants["basal_width"] = rng.uniform(low=0.05, high=1, size=plants.size)
+    plants["basal_dia"] = rng.uniform(low=0.05, high=1, size=plants.size)
     plants["root_sys_width"] = rng.uniform(low=0.1, high=1, size=plants.size)
     plants["shoot_sys_height"] = rng.uniform(low=0.2, high=4, size=plants.size)
     plants["root_sys_depth"] = rng.uniform(low=0.0, high=2, size=plants.size)
-    plants["total_leaf_area"] = rng.uniform(low=0.1, high=3, size=plants.size)
+    plants["total_leaf_area"] = rng.uniform(low=0.001, high=3, size=plants.size)
     plants["live_leaf_area"] = plants["total_leaf_area"]
     plants["plant_age"] = rng.uniform(low=1 / 365, high=5, size=plants.size)
     plants["n_stems"] = rng.integers(1, 6, size=plants.size)
