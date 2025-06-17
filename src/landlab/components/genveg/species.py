@@ -566,6 +566,15 @@ class Species:
                 | np.isinf(_new_biomass[part])
             )
             _new_biomass[part][filter] = np.zeros_like(_new_biomass[part][filter])
+        dead_leaf_area = _new_biomass["total_leaf_area"] - _new_biomass["live_leaf_area"]
+        # Assuming dead leaf area is 95% of live leaf area
+        dead_leaf_area = np.multiply(
+            (0.95 * self.species_morph_params["sp_leaf_area"]),
+            _new_biomass["dead_leaf"],
+            where=(dead_leaf_area > 0.001),
+            out=np.zeros_like(dead_leaf_area)
+        )
+        _new_biomass["total_leaf_area"] = _new_biomass["live_leaf_area"] + dead_leaf_area
         return _new_biomass
 
     def mortality(self, plants, grid, _in_growing_season):
@@ -705,15 +714,15 @@ class Species:
         plants = self.update_dead_biomass(plants, old_biomass)
         return plants
 
+    def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plantlist):
+        # Randomly creates a percent cover
+        return self.habit.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+
     def set_initial_biomass(self, plants, in_growing_season):
+        # I think we just need to figure out how to make leaf area = 0 for decid shrubs
         est_abg_biomass = self.habit.estimate_abg_biomass_from_cover(plants)
-        log_abg_biomass = np.log(
-            est_abg_biomass,
-            out=np.zeros_like(est_abg_biomass, dtype=np.float64),
-            where=(est_abg_biomass > 0.0),
-        )
         total_biomass = np.interp(
-            (10 ** (log_abg_biomass)),
+            est_abg_biomass,
             self.biomass_allocation_array["abg_biomass"],
             self.biomass_allocation_array["total_biomass"],
         )
@@ -722,10 +731,8 @@ class Species:
             plants["leaf_biomass"],
             plants["stem_biomass"],
         ) = self.habit.duration._solve_biomass_allocation(total_biomass)
-        plants["root_sys_width"] = self.habit.calc_root_sys_width(
-            plants["shoot_sys_width"], plants["shoot_sys_height"]
-        )
-        plants = self.habit.duration.set_initial_biomass(
+        plants = self.update_morphology(plants)
+        plants = self.habit.set_initial_biomass(
             plants, in_growing_season
         )
         return plants
@@ -736,7 +743,6 @@ class Species:
 
     def update_morphology(self, plants):
         # Right now this only tracks live biomass - should we track all?
-        # Assuming dead leaf area is 95% of live leaf area
         abg_biomass = self.sum_plant_parts(plants, parts="aboveground")
         plants["basal_dia"], plants["shoot_sys_width"], plants["shoot_sys_height"] = (
             self.habit.calc_abg_dims_from_biomass(abg_biomass)
@@ -744,16 +750,10 @@ class Species:
         plants["root_sys_width"] = self.habit.calc_root_sys_width(
             plants["shoot_sys_width"], plants["basal_dia"], plants["shoot_sys_height"]
         )
-        dead_leaf_area = np.zeros_like(plants["total_leaf_area"])
-        filter = np.nonzero(plants["dead_leaf"] > 0)
         plants["live_leaf_area"] = (
             plants["leaf"] * self.species_morph_params["sp_leaf_area"]
         )
-        dead_leaf_area[filter] = (
-            0.95 * plants["dead_leaf"][filter]
-            * self.species_morph_params["sp_leaf_area"]
-        )
-        plants["total_leaf_area"] = plants["live_leaf_area"] + dead_leaf_area
+
         return plants
 
     def update_dead_biomass(self, _new_biomass, old_biomass):

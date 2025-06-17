@@ -5,7 +5,7 @@ from numpy.testing import assert_array_almost_equal
 from numpy.testing import assert_equal
 
 from landlab.components.genveg.allometry import Biomass
-from landlab.components.genveg.habit import Habit
+from landlab.components.genveg.habit import Habit, Graminoid
 from landlab.components.genveg.species import Species
 
 dt = np.timedelta64(1, 'D')
@@ -25,6 +25,17 @@ def create_habit_object(example_input_params):
     params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
     allometry = Biomass(params, empirical_coeffs={"root_dia_coeffs": {"a": 0.08, "b": 0.24}})
     return Habit(params, allometry, dt=1, green_parts=("leaf", "stem"))
+
+
+def create_graminoid_object(example_input_params):
+    params = example_input_params["BTS"]
+    params["grow_params"]["abg_biomass"] = {}
+    params["morph_params"]["canopy_area"] = {}
+    params["grow_params"]["abg_biomass"]["min"] = params["grow_params"]["plant_part_min"]["leaf"] + params["grow_params"]["plant_part_min"]["stem"]
+    params["grow_params"]["abg_biomass"]["max"] = params["grow_params"]["plant_part_max"]["leaf"] + params["grow_params"]["plant_part_max"]["stem"]
+    params["morph_params"]["canopy_area"]["min"] = params["morph_params"]["shoot_sys_width"]["min"]**2 * 0.25 * np.pi
+    params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
+    return Graminoid(params, dt=1)
 
 
 def test_calc_canopy_area_from_shoot_width(example_input_params):
@@ -88,6 +99,11 @@ def test_estimate_abg_biomass_from_cover(example_input_params, example_plant_arr
     abg_biomass = example_plant_array["leaf"] + example_plant_array["stem"]
     example_plant_array["basal_dia"], example_plant_array["shoot_sys_width"], example_plant_array["shoot_sys_height"] = h.calc_abg_dims_from_biomass(abg_biomass)
     est_abg_biomass = h.estimate_abg_biomass_from_cover(example_plant_array)
+    assert_allclose(est_abg_biomass, abg_biomass, rtol=0.0001)
+    g = create_graminoid_object(example_input_params)
+    abg_biomass = example_plant_array["leaf"] + example_plant_array["stem"]
+    example_plant_array["basal_dia"], example_plant_array["shoot_sys_width"], example_plant_array["shoot_sys_height"] = h.calc_abg_dims_from_biomass(abg_biomass)
+    est_abg_biomass = g.estimate_abg_biomass_from_cover(example_plant_array)
     assert_allclose(est_abg_biomass, abg_biomass, rtol=0.0001)
 
 
