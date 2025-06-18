@@ -27,6 +27,7 @@ def example_input_params():
                 "peak_biomass": 227,
                 "reproduction_end": 250,
                 "reproduction_start": 180,
+                "senesce_rate": 0.07,
                 "senescence_start": 273,
                 "death_rate": {
                     "leaf": 0.03,
@@ -233,7 +234,7 @@ def example_plant():
         ("dead_stem_age", float),
         ("dead_reproductive_age", float),
         ("shoot_sys_width", float),
-        ("basal_width", float),
+        ("basal_dia", float),
         ("root_sys_width", float),
         ("shoot_sys_height", float),
         ("root_sys_depth", float),

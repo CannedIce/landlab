@@ -587,20 +587,20 @@ class PlantGrowth(Species):
         _new_live_biomass["plant_age"] += self.dt.astype(float) * np.ones_like(
             _new_live_biomass["plant_age"]
         )
-        _new_live_biomass = self.update_morphology(_new_live_biomass)
         _new_biomass[filter] = _new_live_biomass
         _new_biomass = self.update_dead_biomass(_new_biomass, _last_biomass)
+        _new_biomass = self.update_morphology(_new_biomass)
         self.plants[~self.plants["pid"].mask] = _new_biomass
         self.plants, self.n_plants = self.remove_plants()
 
     def _init_plants_from_grid(self, in_growing_season, species_cover):
         """
         This method initializes the plants in the PlantGrowth class
-        # from the vegetation fields stored on the grid. This method
-        # is only called if no initial plant array is parameterized
-        # as part of the PlantGrowth initialization.
-        # Required parameters are a boolean inidicating if the plants are
-        # in the active growing season.
+        from the vegetation fields stored on the grid. This method
+        is only called if no initial plant array is parameterized
+        as part of the PlantGrowth initialization.
+        Required parameters are the cell plant cover and a boolean  
+        indicating if the plants are in the active growing season.
         """
         pidval = 0
         plantlist = []
@@ -615,182 +615,11 @@ class PlantGrowth(Species):
                     cover_area = (
                         plant_cover * self._grid.area_of_cell[cell_index] * 0.907
                     )
-                    plant_shoot_widths = []
-                    plant_basal_dias = []
-                    while cover_area > (
-                        1.2 * self.species_morph_params["min_canopy_area"]
-                    ):
-                        plant_basal_dia = rng.uniform(
-                            low=self.species_morph_params["min_basal_dia"],
-                            high=self.species_morph_params["max_basal_dia"],
-                            size=1,
-                        )
-                        plant_canopy_area = self.habit._calc_canopy_area(
-                            plant_basal_dia
-                        )
-                        plant_shoot_width = (
-                            self.habit._calc_shoot_width_from_canopy_area(
-                                plant_canopy_area
-                            )
-                        )
-                        cover_area -= (
-                            np.pi
-                            / 4
-                            * np.sqrt(plant_shoot_width * plant_basal_dia) ** 2
-                        )
-                        if cover_area > 0:
-                            plant_basal_dias.append(plant_basal_dia)
-                            plant_shoot_widths.append(plant_shoot_width)
-                        else:
-                            breakpoint
-                    for index, new_plant_width in enumerate(plant_shoot_widths):
-                        plantlist.append(
-                            (
-                                plant,
-                                pidval,
-                                cell_index,
-                                np.nan,
-                                np.nan,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                new_plant_width,
-                                plant_basal_dias[index],
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0.0,
-                                0,
-                                np.nan,
-                                np.nan,
-                                np.nan,
-                                0,
-                            )
-                        )
-                        pidval += 1
+                    # Cover is dependent on different variables depending on plant habit
+                    plantlist = self.set_initial_cover(cover_area, plant, pidval, cell_index, plantlist)
         plant_array = np.array(plantlist, dtype=self.dtypes)
         plant_array = self.set_initial_biomass(plant_array, in_growing_season)
         return (plant_array, pidval)
-
-    def allocate_biomass_proportionately(
-        self, _last_biomass, _total_biomass, delta_tot
-    ):
-        """
-        This method allocates new net biomass amongst growth parts
-        proportionately based on the relative size of the part. This
-        method is used outside of the growing season since some plant parts
-        may not be present while the plant is dormant. The storage redistribution
-        method is called after initial biomass allocation to redistribute storage
-        biomass to dormant growth parts as needed.
-        Required parameter is a numpy array of net biomass change to be applied
-        to the plant and it returns the structured array _new_biomass.
-        """
-        _new_biomass = _last_biomass
-        _total_biomass = self.sum_plant_parts(_last_biomass, parts="total")
-        filter = np.nonzero(_total_biomass != 0)
-        for part in self.all_parts:
-            _new_biomass[part][filter] = (
-                _last_biomass[part][filter] / _total_biomass[filter]
-            ) * delta_tot[filter] + _last_biomass[part][filter]
-        return _new_biomass
-
-    def adjust_biomass_allocation_towards_ideal(self, _new_biomass):
-        """
-        This method adjusts biomass allocation towards the ideal allocation
-        proportions based on the plant size. If parts of the plant are
-        removed via herbivory or damage, this allows the plant to utilize
-        other stored resources to regrow the damaged parts.
-        """
-        _total_biomass = self.sum_plant_parts(_new_biomass, parts="growth")
-        _min_leaf_mass_frac = (
-            self.species_grow_params["plant_part_min"]["leaf"] / _total_biomass
-        )
-        _min_stem_mass_frac = (
-            self.species_grow_params["plant_part_min"]["stem"] / _total_biomass
-        )
-
-        _min_root_mass_frac = (
-            self.species_grow_params["plant_part_min"]["root"] / _total_biomass
-        )
-
-        current_leaf_mass_frac = np.divide(
-            _new_biomass["leaf_biomass"],
-            _total_biomass,
-            out=np.zeros_like(_total_biomass),
-            where=~np.isclose(_total_biomass, np.zeros_like(_total_biomass)),
-        )
-        current_stem_mass_frac = np.divide(
-            _new_biomass["stem_biomass"],
-            _total_biomass,
-            out=np.zeros_like(_total_biomass),
-            where=~np.isclose(_total_biomass, np.zeros_like(_total_biomass)),
-        )
-
-        ideal_leaf_mass_frac = np.interp(
-            _total_biomass,
-            self.biomass_allocation_array["total_biomass"],
-            self.biomass_allocation_array["leaf_mass_frac"],
-        )
-        ideal_stem_mass_frac = np.interp(
-            _total_biomass,
-            self.biomass_allocation_array["total_biomass"],
-            self.biomass_allocation_array["stem_mass_frac"],
-        )
-
-        current_diff_leaf = ideal_leaf_mass_frac - current_leaf_mass_frac
-        current_diff_stem = ideal_stem_mass_frac - current_stem_mass_frac
-
-        _new_leaf_mass_frac = ideal_leaf_mass_frac - current_diff_leaf * (
-            1
-            - np.exp(
-                -self.species_duration_params["senesce_rate"] * self.dt.astype(int)
-            )
-        )
-        _new_stem_mass_frac = ideal_stem_mass_frac - current_diff_stem * (
-            1
-            - np.exp(
-                -self.species_duration_params["senesce_rate"] * self.dt.astype(int)
-            )
-        )
-
-        _new_root_mass_frac = 1 - _new_leaf_mass_frac - _new_stem_mass_frac
-        _new_leaf_mass_frac[_new_leaf_mass_frac < _min_leaf_mass_frac] = (
-            _min_leaf_mass_frac[_new_leaf_mass_frac < _min_leaf_mass_frac]
-        )
-        _new_stem_mass_frac[_new_stem_mass_frac < _min_stem_mass_frac] = (
-            _min_stem_mass_frac[_new_stem_mass_frac < _min_stem_mass_frac]
-        )
-
-        root_diff = _new_root_mass_frac - _min_root_mass_frac
-        filter = np.nonzero(root_diff < 0)
-        _new_root_mass_frac[filter] = _min_root_mass_frac[filter]
-        _leaf_allocation = _new_leaf_mass_frac / (
-            _new_leaf_mass_frac + _new_stem_mass_frac
-        )
-        _stem_allocation = _new_stem_mass_frac / (
-            _new_leaf_mass_frac + _new_stem_mass_frac
-        )
-        _new_leaf_mass_frac[filter] = _new_leaf_mass_frac[filter] + (
-            root_diff[filter] * _leaf_allocation[filter]
-        )
-        _new_stem_mass_frac[filter] = _new_stem_mass_frac[filter] + (
-            root_diff[filter] * _stem_allocation[filter]
-        )
-        _new_biomass["root_biomass"] = (_new_root_mass_frac) * _total_biomass
-        _new_biomass["leaf_biomass"] = _new_leaf_mass_frac * _total_biomass
-        _new_biomass["stem_biomass"] = _new_stem_mass_frac * _total_biomass
-        return _new_biomass
 
     def set_event_flags(self, _current_jday):
         """

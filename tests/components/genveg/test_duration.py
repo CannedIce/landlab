@@ -58,6 +58,17 @@ def test_emerge(example_input_params, example_plant):
     assert_array_less(mass_green, available_stored_biomass)
 
 
+def test_set_new_biomass(example_input_params, example_plant):
+    d = create_duration_object(example_input_params)
+    example_plant["root"] = example_plant["leaf"] = example_plant["stem"] = np.array([0.])
+    max_start = 2 * d.growdict["growth_min_biomass"]
+    min_start = d.growdict["growth_min_biomass"]
+    emerged_plant = d.set_new_biomass(example_plant)
+    emerged_plant_total = emerged_plant["root"] + emerged_plant["stem"] + emerged_plant["leaf"]
+    assert_array_less(min_start, emerged_plant_total)
+    assert_array_less(emerged_plant_total, max_start)
+
+
 def test_set_initial_biomass(example_input_params, example_plant):
     # Testing for Deciduous set_initial_biomass, testing for other classes handled under test_emerge
     decid_object = create_duration_object(example_input_params, child="deciduous")

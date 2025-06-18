@@ -1,8 +1,6 @@
 import numpy as np
 import pytest
-from numpy.testing import assert_allclose
-from numpy.testing import assert_almost_equal
-from numpy.testing import assert_array_less
+from numpy.testing import assert_allclose, assert_almost_equal, assert_array_less
 
 from landlab.components.genveg.form import Bunch
 from landlab.components.genveg.form import Colonizing
@@ -207,30 +205,110 @@ def test_set_initial_cover(example_input_params):
     assert sum_area < cover_area
     assert (cover_area - sum_area) < min_cover_area
 
-"""
-Start here next
+
 def test_set_initial_biomass(example_input_params, example_plant):
     # Testing for Deciduous set_initial_biomass, testing for other classes handled under test_emerge
     s = create_species_object(example_input_params)
     in_growing_season = True
-    example_plant_total = example_plant["root"] + example_plant["leaf"] + example_plant["stem"]
-    emerged_plant = s.set_initial_biomass(example_plant, in_growing_season)
-    emerged_plant_total = emerged_plant["root"] + emerged_plant["stem"] + emerged_plant["leaf"]
-    assert_almost_equal(example_plant_total, emerged_plant_total)
-    in_growing_season = False
-    emerged_plant = s.set_initial_biomass(example_plant, in_growing_season)
+    abg_biomass = example_plant["leaf"] + example_plant["stem"]
+    root = 0.433864
+    leaf = 0.485539
+    stem = 0.314443
     min_repro = example_input_params["BTS"]["grow_params"]["plant_part_min"]["reproductive"]
     max_repro = example_input_params["BTS"]["grow_params"]["plant_part_max"]["reproductive"]
+    example_plant["basal_dia"], shoot_sys_width, height = s.habit.calc_abg_dims_from_biomass(abg_biomass)
+    example_plant["root"] = np.zeros_like(example_plant["root"])
+    example_plant["leaf"] = np.zeros_like(example_plant["leaf"])
+    example_plant["stem"] = np.zeros_like(example_plant["stem"])
+    emerged_plant = s.set_initial_biomass(example_plant, in_growing_season)
+    assert_allclose(emerged_plant["root"], root, rtol=0.001)
+    assert_allclose(emerged_plant["leaf"], leaf, rtol=0.001)
+    assert_allclose(emerged_plant["stem"], stem, rtol=0.001)
+    assert_array_less(emerged_plant["reproductive"], max_repro)
     assert_array_less(min_repro, emerged_plant["reproductive"])
-    assert_array_less(emerged_plant["root"], max_repro)
-    assert_almost_equal(emerged_plant["root"], example_plant["root"])
-    assert_almost_equal(emerged_plant["leaf"], np.zeros_like(emerged_plant["leaf"]))
-    assert_almost_equal(emerged_plant["stem"], np.zeros_like(emerged_plant["stem"]))
-"""
+    assert_allclose(emerged_plant["shoot_sys_width"], shoot_sys_width, rtol=0.001)
+    assert_allclose(emerged_plant["shoot_sys_height"], height, rtol=0.001)
+    in_growing_season = False
+    emerged_plant = s.set_initial_biomass(example_plant, in_growing_season)
+    zeros = np.zeros_like(example_plant["root"])
+    assert_allclose(emerged_plant["root"], root, rtol=0.001)
+    assert_allclose(emerged_plant["leaf"], zeros, rtol=0.001)
+    assert_allclose(emerged_plant["stem"], zeros, rtol=0.001)
+    assert_allclose(emerged_plant["shoot_sys_width"], zeros, rtol=0.001)
+    assert_allclose(emerged_plant["shoot_sys_height"], zeros, rtol=0.001)
+
+
+def test_sum_plant_parts(example_plant, example_input_params):
+    s = create_species_object(example_input_params)
+    example_plant["reproductive"] = np.array([0.32])
+    example_plant["dead_root"] = np.array([0.15])
+    example_plant["dead_leaf"] = np.array([0.12])
+    example_plant["dead_stem"] = np.array([0.09])
+    example_plant["dead_reproductive"] = np.array([0.02])
+    sums = {
+        "total": 1.92,
+        "growth": 1.6,
+        "aboveground": 0.8,
+        "persistent": 1.12,
+        "green": 0.8,
+        "dead": 0.38,
+        "dead_aboveground": 0.21,
+    }
+    for sum_type in sums:
+        sum_calc = s.sum_plant_parts(example_plant, sum_type)
+        assert_allclose(sum_calc, sums[sum_type], rtol=0.001)
 
 
 def test_emerge(example_plant, example_input_params):
     species_object = create_species_object(example_input_params)
+    example_plant["leaf"] = np.zeros_like(example_plant["leaf"])
+    example_plant["stem"] = np.zeros_like(example_plant["stem"])
+    jday = 195
+    nsc_content_spring195_actual = {
+        "root": 205.575914 / 1000,
+        "leaf": 223.822083 / 1000,
+        "stem": 93.9498113 / 1000,
+        "reproductive": 220.297893 / 1000,
+    }
+    avail_biomass = (
+        (
+            nsc_content_spring195_actual["root"]
+            - species_object.species_grow_params["min_nsc_content"]["root"]
+            * np.ones_like(example_plant["root"])
+        )
+        * example_plant["root"]
+        + (
+            nsc_content_spring195_actual["reproductive"]
+            - species_object.species_grow_params["min_nsc_content"]["reproductive"]
+            * np.ones_like(example_plant["reproductive"])
+        )
+        * example_plant["reproductive"]
+    )
+    total_pers_biomass = example_plant["root"] + example_plant["reproductive"]
+    emerged_plant = species_object.habit.duration.emerge(example_plant, avail_biomass, total_pers_biomass)
+    emerged_plant = species_object.update_morphology(emerged_plant)
+    check_plant = species_object.emerge(example_plant, jday)
+    check_vars = [
+        "root",
+        "leaf",
+        "stem",
+        "reproductive",
+        "basal_dia",
+        "shoot_sys_width",
+        "shoot_sys_height",
+        "root_sys_width",
+        "live_leaf_area"
+    ]
+    for var in check_vars:
+        assert_allclose(check_plant[var], emerged_plant[var], rtol=0.001)
+
+
+def test__adjust_biomass_allocation_towards_ideal(example_input_params, example_plant):
+    s = create_species_object(example_input_params)
+
+
+def test_allocate_biomass_dynamically(example_input_params, example_plant):
+    s = create_species_object(example_input_params)
 
 
 def test_mortality(example_input_params, two_cell_grid, example_plant_array):

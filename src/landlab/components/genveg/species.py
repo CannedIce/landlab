@@ -456,6 +456,93 @@ class Species:
         _new_biomass = self.adjust_biomass_allocation_towards_ideal(_new_biomass)
         return _new_biomass
 
+    def adjust_biomass_allocation_towards_ideal(self, _new_biomass):
+        """
+        This method adjusts biomass allocation towards the ideal allocation
+        proportions based on the plant size. If parts of the plant are
+        removed via herbivory or damage, this allows the plant to utilize
+        other stored resources to regrow the damaged parts.
+        """
+        _total_biomass = self.sum_plant_parts(_new_biomass, parts="growth")
+        _min_leaf_mass_frac = (
+            self.species_grow_params["plant_part_min"]["leaf"] / _total_biomass
+        )
+        _min_stem_mass_frac = (
+            self.species_grow_params["plant_part_min"]["stem"] / _total_biomass
+        )
+
+        _min_root_mass_frac = (
+            self.species_grow_params["plant_part_min"]["root"] / _total_biomass
+        )
+
+        current_leaf_mass_frac = np.divide(
+            _new_biomass["leaf_biomass"],
+            _total_biomass,
+            out=np.zeros_like(_total_biomass),
+            where=~np.isclose(_total_biomass, np.zeros_like(_total_biomass)),
+        )
+        current_stem_mass_frac = np.divide(
+            _new_biomass["stem_biomass"],
+            _total_biomass,
+            out=np.zeros_like(_total_biomass),
+            where=~np.isclose(_total_biomass, np.zeros_like(_total_biomass)),
+        )
+
+        ideal_leaf_mass_frac = np.interp(
+            _total_biomass,
+            self.biomass_allocation_array["total_biomass"],
+            self.biomass_allocation_array["leaf_mass_frac"],
+        )
+        ideal_stem_mass_frac = np.interp(
+            _total_biomass,
+            self.biomass_allocation_array["total_biomass"],
+            self.biomass_allocation_array["stem_mass_frac"],
+        )
+
+        current_diff_leaf = ideal_leaf_mass_frac - current_leaf_mass_frac
+        current_diff_stem = ideal_stem_mass_frac - current_stem_mass_frac
+
+        _new_leaf_mass_frac = ideal_leaf_mass_frac - current_diff_leaf * (
+            1
+            - np.exp(
+                -self.species_duration_params["senesce_rate"] * self.dt.astype(int)
+            )
+        )
+        _new_stem_mass_frac = ideal_stem_mass_frac - current_diff_stem * (
+            1
+            - np.exp(
+                -self.species_duration_params["senesce_rate"] * self.dt.astype(int)
+            )
+        )
+
+        _new_root_mass_frac = 1 - _new_leaf_mass_frac - _new_stem_mass_frac
+        _new_leaf_mass_frac[_new_leaf_mass_frac < _min_leaf_mass_frac] = (
+            _min_leaf_mass_frac[_new_leaf_mass_frac < _min_leaf_mass_frac]
+        )
+        _new_stem_mass_frac[_new_stem_mass_frac < _min_stem_mass_frac] = (
+            _min_stem_mass_frac[_new_stem_mass_frac < _min_stem_mass_frac]
+        )
+
+        root_diff = _new_root_mass_frac - _min_root_mass_frac
+        filter = np.nonzero(root_diff < 0)
+        _new_root_mass_frac[filter] = _min_root_mass_frac[filter]
+        _leaf_allocation = _new_leaf_mass_frac / (
+            _new_leaf_mass_frac + _new_stem_mass_frac
+        )
+        _stem_allocation = _new_stem_mass_frac / (
+            _new_leaf_mass_frac + _new_stem_mass_frac
+        )
+        _new_leaf_mass_frac[filter] = _new_leaf_mass_frac[filter] + (
+            root_diff[filter] * _leaf_allocation[filter]
+        )
+        _new_stem_mass_frac[filter] = _new_stem_mass_frac[filter] + (
+            root_diff[filter] * _stem_allocation[filter]
+        )
+        _new_biomass["root_biomass"] = (_new_root_mass_frac) * _total_biomass
+        _new_biomass["leaf_biomass"] = _new_leaf_mass_frac * _total_biomass
+        _new_biomass["stem_biomass"] = _new_stem_mass_frac * _total_biomass
+        return _new_biomass
+
     def branch(self):
         self.form.branch()
 
