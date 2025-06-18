@@ -403,7 +403,7 @@ class Species:
         # Required parameters are the new net biomass generated for the day
         ###
 
-        _new_biomass = _live_biomass
+        _new_biomass = _live_biomass.copy()
         growth_biomass = self.sum_plant_parts(_live_biomass, parts="growth")
 
         # Interpolate values from biomass allocation array
@@ -430,9 +430,10 @@ class Species:
         )
 
         # Calculate allocation
+        # THIS SEEMS WRONG - like we just use _glu_req_sum for last part
         _glu_req_sum = np.zeros_like(_new_biomass["root"])
         for part in self.growth_parts:
-            _glu_req_sum = (
+            _glu_req_sum += (
                 self.species_grow_params["glucose_requirement"][part]
                 * _new_biomass[part]
                 / growth_biomass
