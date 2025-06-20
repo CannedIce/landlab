@@ -136,10 +136,9 @@ class Annual(Duration):
 
     def set_initial_biomass(self, plants, in_growing_season):
         if in_growing_season:
-            plants = self.set_new_biomass(plants)
+            return plants
         else:
-            plants = self.enter_dormancy(plants)
-        return plants
+            return self.enter_dormancy(plants)
 
 
 class Perennial(Duration):
@@ -173,7 +172,6 @@ class Perennial(Duration):
         return super().set_new_biomass(plants)
 
     def set_initial_biomass(self, plants, in_growing_season):
-        plants = self.set_new_biomass(plants)
         return plants
 
 
@@ -182,7 +180,7 @@ class Evergreen(Perennial):
         self.keep_green_parts = True
         super().__init__(species_grow_params, duration_params, dt)
 
-    def set_initial_biomass(self, plants, in_growing_season):
+    def set_initial_biomass(self, plants, in_growing_season=True):
         return super().set_initial_biomass(plants, in_growing_season)
 
     def set_new_biomass(self, plants):
@@ -240,22 +238,15 @@ class Deciduous(Perennial):
         return super().enter_dormancy(plants)
 
     def set_initial_biomass(self, plants, in_growing_season):
+        # Adjusts biomass and morphology based on growing season
         if not in_growing_season:
-            for part in self.green_parts:
-                plants[part] = np.zeros_like(plants[part])
-            for part in self.persistent_parts:
-                plants[part] = rng.uniform(
-                    low=self.growdict["plant_part_min"][part],
-                    high=self.growdict["plant_part_min"][part] * 2,
-                    size=plants.size,
-                )
+            plants = self.enter_dormancy(plants)
+            if "leaf" in self.green_parts:
+                plants["live_leaf_area"] = np.zeros_like(plants["leaf"])
+            if "stem" in self.green_parts:
+                plants["shoot_sys_height"] = np.zeros_like(plants["leaf"])
+                plants["shoot_sys_width"] = np.zeros_like(plants["leaf"])
         else:
-            for part in (self.green_parts + self.persistent_parts):
-                plants[part] = rng.uniform(
-                    low=self.growdict["plant_part_min"][part],
-                    high=self.growdict["plant_part_min"][part] * 2,
-                    size=plants.size,
-                )
             plants["repro_biomass"] = (
                 self.growdict["plant_part_min"]["reproductive"]
                 + rng.rayleigh(scale=0.2, size=plants.size)

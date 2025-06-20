@@ -80,6 +80,7 @@ class GenVeg(Component, PlantGrowth):
                     cell_index
                 ]
                 species_list = species_list[~np.isin(species_list, "null")]
+                species_list = species_list[np.unique(species_list, return_index=True)]
                 cell_cover = self._grid.at_cell["vegetation__cover_fraction"][
                     cell_index
                 ]

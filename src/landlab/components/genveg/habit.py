@@ -106,9 +106,70 @@ class Habit:
         plants = self.duration.senesce(plants, ns_green_mass, persistent_mass)
         return plants
 
+    def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plantlist):
+        # Randomly creates a percent cover
+        plant_cover = []
+        min_cover_area = 1.2 * self._calc_canopy_area_from_shoot_width(self.morph_params["shoot_sys_width"]["min"])
+        while cover_area > min_cover_area:
+            # Make this a call to species->habit->allometry
+            shoot_sys_width = rng.uniform(
+                low=self.morph_params["shoot_sys_width"]["min"],
+                high=self.morph_params["shoot_sys_width"]["max"],
+                size=1,
+            )
+            plant_canopy_area = self._calc_canopy_area_from_shoot_width(
+                shoot_sys_width
+            )
+            if cover_area > plant_canopy_area:
+                plant_cover.append(shoot_sys_width)
+                cover_area -= plant_canopy_area
+        for new_plant_width in plant_cover:
+            plantlist.append(
+                (
+                    species_name,
+                    pidval,
+                    cell_index,
+                    np.nan,
+                    np.nan,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    new_plant_width,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    np.nan,
+                    np.nan,
+                    np.nan,
+                    0,
+                )
+            )
+            pidval += 1
+        return plantlist
+
     def set_initial_biomass(self, plants, in_growing_season):
         plants = self.duration.set_initial_biomass(plants, in_growing_season)
-        return plants
+        if in_growing_season:
+            return plants
+        else:
+            plants["shoot_sys_height"] = np.zeros_like(plants["stem"])
+            plants["shoot_sys_width"] = np.zeros_like(plants["stem"])
+            plants["basal_dia"] = np.zeros_like(plants["stem"])
+            return plants
 
     def enter_dormancy(self, plants):
         plants = self.duration.enter_dormancy(plants)
@@ -190,6 +251,60 @@ class Graminoid(Habit):
         est_abg_biomass = self.allometry.calc_abg_biomass_from_dim(plants["basal_dia"], "basal_dia", cm=self.allometry.cm)
         return est_abg_biomass
 
+    def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plantlist):
+        # Randomly creates a percent cover
+        plant_cover = []
+        min_cover_area = 1.2 * self._calc_canopy_area_from_shoot_width(self.morph_params["basal_dia"]["min"])
+        while cover_area > min_cover_area:
+            basal_dia = rng.uniform(
+                low=self.morph_params["basal_dia"]["min"],
+                high=self.morph_params["basal_dia"]["max"],
+                size=1,
+            )
+            plant_area = self._calc_canopy_area_from_shoot_width(
+                basal_dia
+            )
+            if cover_area > plant_area:
+                plant_cover.append(basal_dia)
+                cover_area -= plant_area
+        for new_plant_width in plant_cover:
+            plantlist.append(
+                (
+                    species_name,
+                    pidval,
+                    cell_index,
+                    np.nan,
+                    np.nan,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    new_plant_width,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    np.nan,
+                    np.nan,
+                    np.nan,
+                    0,
+                )
+            )
+            pidval += 1
+        return plantlist
+
 
 class Shrub(Habit):
     def __init__(self, params, dt, empirical_coeffs={
@@ -219,12 +334,20 @@ class Shrub(Habit):
         # - shoot system width is a function of aboveground biomass and basal diameter in m
         # - height is a function of aboveground biomass, basal diameter, amd canopy diameter in m
 
+    def set_initial_biomass(self, plants, in_growing_season):
+        plants = self.duration.set_initial_biomass(plants, in_growing_season)
+        return plants
+
 
 class Tree(Habit):
     def __init__(self, params, dt, empirical_coeffs={"root_dia_coeffs": {"a": 0.35, "b": 0.31, }}):
         green_parts = ("leaf")
         allometry = self._select_allometry_class(params, empirical_coeffs)
         super().__init__(params, allometry, dt, green_parts)
+
+    def set_initial_biomass(self, plants, in_growing_season):
+        plants = self.duration.set_initial_biomass(plants, in_growing_season)
+        return plants
 
 
 class Vine(Habit):

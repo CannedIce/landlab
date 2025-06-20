@@ -115,8 +115,6 @@ def test_calc_abg_dims(example_input_params):
     # Dimensional relationships
 
     d = create_default_dimensional_object(example_input_params)
-    print
-    print(d.morph_params["empirical_coeffs"])
     basal_diameter = np.array([0.009, 0.036, 0.05])
     height = np.array([0.218283, 0.514921, 0.631049])
     shoot_sys_width = np.array([0.257388353, 0.639255015, 0.79304121])

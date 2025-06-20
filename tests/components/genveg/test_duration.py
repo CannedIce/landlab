@@ -58,23 +58,32 @@ def test_emerge(example_input_params, example_plant):
     assert_array_less(mass_green, available_stored_biomass)
 
 
+def test_set_new_biomass(example_input_params, example_plant):
+    d = create_duration_object(example_input_params)
+    example_plant["root"] = example_plant["leaf"] = example_plant["stem"] = np.array([0.])
+    max_start = 2 * d.growdict["growth_min_biomass"]
+    min_start = d.growdict["growth_min_biomass"]
+    emerged_plant = d.set_new_biomass(example_plant)
+    emerged_plant_total = emerged_plant["root"] + emerged_plant["stem"] + emerged_plant["leaf"]
+    assert_array_less(min_start, emerged_plant_total)
+    assert_array_less(emerged_plant_total, max_start)
+
+
 def test_set_initial_biomass(example_input_params, example_plant):
     # Testing for Deciduous set_initial_biomass, testing for other classes handled under test_emerge
     decid_object = create_duration_object(example_input_params, child="deciduous")
     in_growing_season = True
-    example_plant["root"] = example_plant["leaf"] = example_plant["stem"] = np.array([0.])
-    max_start = 2 * decid_object.growdict["growth_min_biomass"]
-    min_start = decid_object.growdict["growth_min_biomass"]
+    example_plant_total = example_plant["root"] + example_plant["leaf"] + example_plant["stem"]
     emerged_plant = decid_object.set_initial_biomass(example_plant, in_growing_season)
     emerged_plant_total = emerged_plant["root"] + emerged_plant["stem"] + emerged_plant["leaf"]
-    assert_array_less(min_start, emerged_plant_total)
-    assert_array_less(emerged_plant_total, max_start)
+    assert_almost_equal(example_plant_total, emerged_plant_total)
     in_growing_season = False
-    min_root = decid_object.growdict["plant_part_min"]["root"]
-    max_root = 2 * min_root
     emerged_plant = decid_object.set_initial_biomass(example_plant, in_growing_season)
-    assert_array_less(min_root, emerged_plant["root"])
-    assert_array_less(emerged_plant["root"], max_root)
+    min_repro = example_input_params["BTS"]["grow_params"]["plant_part_min"]["reproductive"]
+    max_repro = example_input_params["BTS"]["grow_params"]["plant_part_max"]["reproductive"]
+    assert_array_less(min_repro, emerged_plant["reproductive"])
+    assert_array_less(emerged_plant["root"], max_repro)
+    assert_almost_equal(emerged_plant["root"], example_plant["root"])
     assert_almost_equal(emerged_plant["leaf"], np.zeros_like(emerged_plant["leaf"]))
     assert_almost_equal(emerged_plant["stem"], np.zeros_like(emerged_plant["stem"]))
 

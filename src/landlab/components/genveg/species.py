@@ -403,9 +403,8 @@ class Species:
         # Required parameters are the new net biomass generated for the day
         ###
 
-        _new_biomass = _live_biomass
+        _new_biomass = _live_biomass.copy()
         growth_biomass = self.sum_plant_parts(_live_biomass, parts="growth")
-
         # Interpolate values from biomass allocation array
         delta_leaf_unit_root = np.interp(
             _live_biomass["root_biomass"],
@@ -420,7 +419,7 @@ class Species:
         filter = np.nonzero(delta_tot > 0)
         frac_to_growth = np.ones_like(_live_biomass["root"])
         frac_to_repro = np.zeros_like(_live_biomass["root"])
-        mass_ratio = growth_biomass / self.species_grow_params["max_growth_biomass"]
+        mass_ratio = growth_biomass / self.species_grow_params["growth_biomass"]["max"]
         frac_to_growth[filter] = 1 / (1 + 0.002 * np.exp(9.50 * mass_ratio[filter]))
         frac_to_repro[filter] = 1 - frac_to_growth[filter]
         _new_biomass["reproductive"] += (
@@ -432,7 +431,7 @@ class Species:
         # Calculate allocation
         _glu_req_sum = np.zeros_like(_new_biomass["root"])
         for part in self.growth_parts:
-            _glu_req_sum = (
+            _glu_req_sum += (
                 self.species_grow_params["glucose_requirement"][part]
                 * _new_biomass[part]
                 / growth_biomass
@@ -453,7 +452,80 @@ class Species:
             # update biomass in plant array
             _new_biomass[part] = _live_biomass[part] + delta[part]
         # Adjust biomass allocation among storage and growth parts
-        _new_biomass = self.adjust_biomass_allocation_towards_ideal(_new_biomass)
+        _new_biomass = self._adjust_biomass_allocation_towards_ideal(_new_biomass)
+        return _new_biomass
+
+    def _adjust_biomass_allocation_towards_ideal(self, _new_biomass):
+        """
+        This method adjusts biomass allocation towards the ideal allocation
+        proportions based on the plant size. If parts of the plant are
+        removed via herbivory or damage, this allows the plant to utilize
+        other stored resources to regrow the damaged parts.
+        """
+        _total_biomass = self.sum_plant_parts(_new_biomass, parts="growth")
+        _min_leaf_mass_frac = (
+            self.species_grow_params["plant_part_min"]["leaf"] / _total_biomass
+        )
+        _min_stem_mass_frac = (
+            self.species_grow_params["plant_part_min"]["stem"] / _total_biomass
+        )
+
+        _min_root_mass_frac = (
+            self.species_grow_params["plant_part_min"]["root"] / _total_biomass
+        )
+
+        current_leaf_mass_frac = np.divide(
+            _new_biomass["leaf_biomass"],
+            _total_biomass,
+            out=np.zeros_like(_total_biomass),
+            where=~np.isclose(_total_biomass, np.zeros_like(_total_biomass)),
+        )
+        current_stem_mass_frac = np.divide(
+            _new_biomass["stem_biomass"],
+            _total_biomass,
+            out=np.zeros_like(_total_biomass),
+            where=~np.isclose(_total_biomass, np.zeros_like(_total_biomass)),
+        )
+        ideal_leaf_mass_frac = np.interp(
+            _total_biomass,
+            self.biomass_allocation_array["total_biomass"],
+            self.biomass_allocation_array["leaf_mass_frac"],
+        )
+        ideal_stem_mass_frac = np.interp(
+            _total_biomass,
+            self.biomass_allocation_array["total_biomass"],
+            self.biomass_allocation_array["stem_mass_frac"],
+        )
+        current_diff_leaf = ideal_leaf_mass_frac - current_leaf_mass_frac
+        current_diff_stem = ideal_stem_mass_frac - current_stem_mass_frac
+
+        _new_leaf_mass_frac = current_leaf_mass_frac - (-self.species_grow_params["translocation_rate"]["leaf"] * self.dt.astype(int) * current_diff_leaf)
+        _new_stem_mass_frac = current_stem_mass_frac - (-self.species_grow_params["translocation_rate"]["stem"] * self.dt.astype(int) * current_diff_stem)
+        _new_root_mass_frac = 1 - _new_leaf_mass_frac - _new_stem_mass_frac
+        _new_leaf_mass_frac[_new_leaf_mass_frac < _min_leaf_mass_frac] = (
+            _min_leaf_mass_frac[_new_leaf_mass_frac < _min_leaf_mass_frac]
+        )
+        _new_stem_mass_frac[_new_stem_mass_frac < _min_stem_mass_frac] = (
+            _min_stem_mass_frac[_new_stem_mass_frac < _min_stem_mass_frac]
+        )
+        root_diff = _new_root_mass_frac - _min_root_mass_frac
+        filter = np.nonzero(root_diff < 0)
+        _new_root_mass_frac[filter] = _min_root_mass_frac[filter]
+        _leaf_allocation = _new_leaf_mass_frac / (
+            _new_leaf_mass_frac + _new_stem_mass_frac
+        )
+        _stem_allocation = _new_stem_mass_frac / (
+            _new_leaf_mass_frac + _new_stem_mass_frac
+        )
+        _new_leaf_mass_frac[filter] = _new_leaf_mass_frac[filter] + (
+            root_diff[filter] * _leaf_allocation[filter]
+        )
+        _new_stem_mass_frac[filter] = _new_stem_mass_frac[filter] + (
+            root_diff[filter] * _stem_allocation[filter]
+        )
+        _new_biomass["root_biomass"] = _new_root_mass_frac * _total_biomass
+        _new_biomass["leaf_biomass"] = _new_leaf_mass_frac * _total_biomass
+        _new_biomass["stem_biomass"] = _new_stem_mass_frac * _total_biomass
         return _new_biomass
 
     def branch(self):
@@ -566,6 +638,15 @@ class Species:
                 | np.isinf(_new_biomass[part])
             )
             _new_biomass[part][filter] = np.zeros_like(_new_biomass[part][filter])
+        dead_leaf_area = _new_biomass["total_leaf_area"] - _new_biomass["live_leaf_area"]
+        # Assuming dead leaf area is 95% of live leaf area
+        dead_leaf_area = np.multiply(
+            (0.95 * self.species_morph_params["sp_leaf_area"]),
+            _new_biomass["dead_leaf"],
+            where=(dead_leaf_area > 0.001),
+            out=np.zeros_like(dead_leaf_area)
+        )
+        _new_biomass["total_leaf_area"] = _new_biomass["live_leaf_area"] + dead_leaf_area
         return _new_biomass
 
     def mortality(self, plants, grid, _in_growing_season):
@@ -705,15 +786,15 @@ class Species:
         plants = self.update_dead_biomass(plants, old_biomass)
         return plants
 
+    def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plantlist):
+        # Randomly creates a percent cover
+        return self.habit.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+
     def set_initial_biomass(self, plants, in_growing_season):
+        # I think we just need to figure out how to make leaf area = 0 for decid shrubs
         est_abg_biomass = self.habit.estimate_abg_biomass_from_cover(plants)
-        log_abg_biomass = np.log(
-            est_abg_biomass,
-            out=np.zeros_like(est_abg_biomass, dtype=np.float64),
-            where=(est_abg_biomass > 0.0),
-        )
         total_biomass = np.interp(
-            (10 ** (log_abg_biomass)),
+            est_abg_biomass,
             self.biomass_allocation_array["abg_biomass"],
             self.biomass_allocation_array["total_biomass"],
         )
@@ -722,10 +803,8 @@ class Species:
             plants["leaf_biomass"],
             plants["stem_biomass"],
         ) = self.habit.duration._solve_biomass_allocation(total_biomass)
-        plants["root_sys_width"] = self.habit.calc_root_sys_width(
-            plants["shoot_sys_width"], plants["shoot_sys_height"]
-        )
-        plants = self.habit.duration.set_initial_biomass(
+        plants = self.update_morphology(plants)
+        plants = self.habit.set_initial_biomass(
             plants, in_growing_season
         )
         return plants
@@ -736,7 +815,6 @@ class Species:
 
     def update_morphology(self, plants):
         # Right now this only tracks live biomass - should we track all?
-        # Assuming dead leaf area is 95% of live leaf area
         abg_biomass = self.sum_plant_parts(plants, parts="aboveground")
         plants["basal_dia"], plants["shoot_sys_width"], plants["shoot_sys_height"] = (
             self.habit.calc_abg_dims_from_biomass(abg_biomass)
@@ -744,16 +822,10 @@ class Species:
         plants["root_sys_width"] = self.habit.calc_root_sys_width(
             plants["shoot_sys_width"], plants["basal_dia"], plants["shoot_sys_height"]
         )
-        dead_leaf_area = np.zeros_like(plants["total_leaf_area"])
-        filter = np.nonzero(plants["dead_leaf"] > 0)
         plants["live_leaf_area"] = (
             plants["leaf"] * self.species_morph_params["sp_leaf_area"]
         )
-        dead_leaf_area[filter] = (
-            0.95 * plants["dead_leaf"][filter]
-            * self.species_morph_params["sp_leaf_area"]
-        )
-        plants["total_leaf_area"] = plants["live_leaf_area"] + dead_leaf_area
+
         return plants
 
     def update_dead_biomass(self, _new_biomass, old_biomass):
