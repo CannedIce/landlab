@@ -405,7 +405,6 @@ class Species:
 
         _new_biomass = _live_biomass.copy()
         growth_biomass = self.sum_plant_parts(_live_biomass, parts="growth")
-
         # Interpolate values from biomass allocation array
         delta_leaf_unit_root = np.interp(
             _live_biomass["root_biomass"],
@@ -420,7 +419,7 @@ class Species:
         filter = np.nonzero(delta_tot > 0)
         frac_to_growth = np.ones_like(_live_biomass["root"])
         frac_to_repro = np.zeros_like(_live_biomass["root"])
-        mass_ratio = growth_biomass / self.species_grow_params["max_growth_biomass"]
+        mass_ratio = growth_biomass / self.species_grow_params["growth_biomass"]["max"]
         frac_to_growth[filter] = 1 / (1 + 0.002 * np.exp(9.50 * mass_ratio[filter]))
         frac_to_repro[filter] = 1 - frac_to_growth[filter]
         _new_biomass["reproductive"] += (
@@ -430,7 +429,6 @@ class Species:
         )
 
         # Calculate allocation
-        # THIS SEEMS WRONG - like we just use _glu_req_sum for last part
         _glu_req_sum = np.zeros_like(_new_biomass["root"])
         for part in self.growth_parts:
             _glu_req_sum += (

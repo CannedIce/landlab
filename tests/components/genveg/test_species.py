@@ -329,6 +329,15 @@ def test__adjust_biomass_allocation_towards_ideal(example_input_params, example_
 
 def test_allocate_biomass_dynamically(example_input_params, example_plant):
     s = create_species_object(example_input_params)
+    new_root = np.array([0.789284])
+    new_leaf = np.array([0.514743])
+    new_stem = np.array([0.312879])
+    new_repro = np.array([0.000104917])
+    allocated_plant = s.allocate_biomass_dynamically(example_plant, np.array([0.025]))
+    assert_allclose(allocated_plant["root"], new_root, rtol=0.001)
+    assert_allclose(allocated_plant["leaf"], new_leaf, rtol=0.001)
+    assert_allclose(allocated_plant["stem"], new_stem, rtol=0.001)
+    assert_allclose(allocated_plant["reproductive"], new_repro, rtol=0.001)
 
 
 def test_mortality(example_input_params, two_cell_grid, example_plant_array):
