@@ -305,6 +305,26 @@ def test_emerge(example_plant, example_input_params):
 
 def test__adjust_biomass_allocation_towards_ideal(example_input_params, example_plant):
     s = create_species_object(example_input_params)
+    new_root = np.array([0.783358])
+    new_leaf = np.array([0.508459])
+    new_stem = np.array([0.308183])
+    adjust_plant = s._adjust_biomass_allocation_towards_ideal(example_plant)
+    assert_allclose(adjust_plant["root"], new_root, rtol=0.001)
+    assert_allclose(adjust_plant["leaf"], new_leaf, rtol=0.001)
+    assert_allclose(adjust_plant["stem"], new_stem, rtol=0.001)
+    # Check to see if ratios adjusted when root is small
+    small_root_plant = example_plant
+    small_root_plant["root"] = np.array([0.005])
+    small_root_plant["leaf"] = np.array([0.5])
+    small_root_plant["stem"] = np.array([0.2999])
+    s.species_grow_params["plant_part_min"]["root"] = 0.03
+    new_root = np.array([0.030000])
+    new_leaf = np.array([0.484195])
+    new_stem = np.array([0.290805])
+    adjust_plant = s._adjust_biomass_allocation_towards_ideal(small_root_plant)
+    assert_allclose(adjust_plant["root"], new_root, rtol=0.001)
+    assert_allclose(adjust_plant["leaf"], new_leaf, rtol=0.001)
+    assert_allclose(adjust_plant["stem"], new_stem, rtol=0.001)
 
 
 def test_allocate_biomass_dynamically(example_input_params, example_plant):

@@ -27,7 +27,6 @@ def example_input_params():
                 "peak_biomass": 227,
                 "reproduction_end": 250,
                 "reproduction_start": 180,
-                "senesce_rate": 0.07,
                 "senescence_start": 273,
                 "death_rate": {
                     "leaf": 0.03,
@@ -42,6 +41,12 @@ def example_input_params():
                     "reproductive": 1.414,
                     "root": 1.444,
                     "stem": 1.513,
+                },
+                "translocation_rate": {
+                    "leaf": 0.07,
+                    "reproductive": 0.07,
+                    "root": 0.07,
+                    "stem": 0.07,
                 },
                 "growth_max_biomass": 13.899999999999999,
                 "growth_min_biomass": 0.06222222222222222,
