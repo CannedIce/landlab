@@ -2,6 +2,11 @@ import numpy as np
 import pytest
 
 from landlab import RasterModelGrid
+from landlab.components.genveg.allometry import Biomass, Dimensional
+from landlab.components.genveg.duration import Annual, Deciduous, Evergreen
+from landlab.components.genveg.habit import Habit, Graminoid
+from landlab.components.genveg.species import Species
+from landlab.components.genveg.dispersal import Clonal, Seed, Random
 
 
 @pytest.fixture(autouse=True)
@@ -15,10 +20,17 @@ def example_input_params():
     param_dict = {
         "BTS": {
             "col_params": {"prob_colonization": 0.01, "time_to_colonization": 365},
-            "dispersal_params": {
-                "max_dist_dispersal": 0.4,
+            "disperse_params": {
+                "max_dist_runner": 0.4,
                 "min_size_dispersal": 0.5,
                 "unit_cost_dispersal": 1.2,
+                "mass_to_seedling_rate": 0.002,
+                "mean_seed_distance": 0.6,
+                "max_seed_distance": 10,
+                "seed_distribution_shape_param": 1.5,
+                "seed_mass": 0.0002,
+                "seed_efficiency": (300 / 5000),
+                "daily_colonization_probability": 0.01,
             },
             "duration_params": {
                 "growing_season_end": 305,
@@ -205,10 +217,10 @@ def example_input_params():
             "plant_factors": {
                 "angio_gymno": "angiosperm",
                 "duration": "perennial deciduous",
-                "growth_form": "rhizomatous",
                 "growth_habit": "graminoid",
                 "monocot_dicot": "monocot",
                 "p_type": "C3",
+                "reproductive_modes": ["clonal", "seed", "random"],
                 "species": "BTS",
                 "storage": "belowground"
             },
@@ -247,9 +259,16 @@ def example_plant():
         ("live_leaf_area", float),
         ("plant_age", float),
         ("n_stems", int),
-        ("pup_x_loc", float),
-        ("pup_y_loc", float),
-        ("pup_cost", float),
+        ("dispersal", [
+            ("pup_x_loc", float),
+            ("pup_y_loc", float),
+            ("pup_cost", float),
+            ("seedling_x_loc", float, (10,)),
+            ("seedling_y_loc", float, (10,)),
+            ("seedling_reserve", float),
+            ("random_x_loc", float, (10,)),
+            ("random_y_loc", float, (10,)),
+        ]),
         ("item_id", int),
     ]
     plants = np.empty(1, dtype=dtypes)
@@ -287,9 +306,16 @@ def example_plant():
                 0.0,
                 0.0,
                 0,
-                np.nan,
-                np.nan,
-                np.nan,
+                (
+                    np.nan,
+                    np.nan,
+                    np.nan,
+                    [np.nan],
+                    [np.nan],
+                    np.nan,
+                    [np.nan],
+                    [np.nan],
+                ),
                 i,
             )
         )
@@ -297,6 +323,7 @@ def example_plant():
     plants["root"] = np.array([0.80000000000000004])
     plants["stem"] = np.array([0.29999999999999999])
     plants["leaf"] = np.array([0.50000000000000000])
+    plants["reproductive"] = np.array([0.30])
     plants["live_leaf_area"] = 0.022 * plants["leaf"]
     plants["shoot_sys_width"] = np.array(
         [(4 * (plants["live_leaf_area"] / 0.012) / np.pi) ** 0.5]
@@ -338,9 +365,16 @@ def example_plant_array(set_random_seed):
         ("live_leaf_area", float),
         ("plant_age", float),
         ("n_stems", int),
-        ("pup_x_loc", float),
-        ("pup_y_loc", float),
-        ("pup_cost", float),
+        ("dispersal", [
+            ("pup_x_loc", float),
+            ("pup_y_loc", float),
+            ("pup_cost", float),
+            ("seedling_x_loc", float, (10,)),
+            ("seedling_y_loc", float, (10,)),
+            ("seedling_reserve", float),
+            ("random_x_loc", float, (10,)),
+            ("random_y_loc", float, (10,)),
+        ]),
         ("item_id", int),
     ]
     plants = np.empty(100, dtype=dtypes)
@@ -378,9 +412,16 @@ def example_plant_array(set_random_seed):
                 0.0,
                 0.0,
                 0,
-                np.nan,
-                np.nan,
-                np.nan,
+                (
+                    np.nan,
+                    np.nan,
+                    np.nan,
+                    [np.nan],
+                    [np.nan],
+                    np.nan,
+                    [np.nan],
+                    [np.nan],
+                ),
                 i,
             )
         )
@@ -411,9 +452,9 @@ def example_plant_array(set_random_seed):
     plants["live_leaf_area"] = plants["total_leaf_area"]
     plants["plant_age"] = rng.uniform(low=1 / 365, high=5, size=plants.size)
     plants["n_stems"] = rng.integers(1, 6, size=plants.size)
-    plants["pup_x_loc"][plants["reproductive"] > 0.1] = 0.0
-    plants["pup_y_loc"][plants["reproductive"] > 0.1] = 0.0
-    plants["pup_cost"][plants["reproductive"] > 0.1] = 0.75
+    plants["dispersal"]["pup_x_loc"][plants["reproductive"] > 0.1] = 0.1
+    plants["dispersal"]["pup_y_loc"][plants["reproductive"] > 0.1] = 0.2
+    plants["dispersal"]["pup_cost"][plants["reproductive"] > 0.1] = 0.75
     plants["item_id"] = np.array([1, 2, 3, 4, 5, 6, 7, 8])
     return plants
 
@@ -502,3 +543,93 @@ def two_cell_grid():
         units="m**3/m**3",
     )
     return grid
+
+
+@pytest.fixture
+def biomass_minmax(example_input_params):
+    params = example_input_params["BTS"]
+    params["grow_params"]["abg_biomass"] = {}
+    params["morph_params"]["canopy_area"] = {}
+    params["grow_params"]["abg_biomass"]["min"] = params["grow_params"]["plant_part_min"]["leaf"] + params["grow_params"]["plant_part_min"]["stem"]
+    params["grow_params"]["abg_biomass"]["max"] = params["grow_params"]["plant_part_max"]["leaf"] + params["grow_params"]["plant_part_max"]["stem"]
+    params["morph_params"]["canopy_area"]["min"] = params["morph_params"]["shoot_sys_width"]["min"]**2 * 0.25 * np.pi
+    params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
+    return Biomass(params)
+
+
+@pytest.fixture
+def dimensional_default(example_input_params):
+    params = example_input_params["BTS"]
+    params["morph_params"]["allometry_method"] = "default"
+    params["grow_params"]["abg_biomass"] = {}
+    params["morph_params"]["canopy_area"] = {}
+    params["grow_params"]["abg_biomass"]["min"] = params["grow_params"]["plant_part_min"]["leaf"] + params["grow_params"]["plant_part_min"]["stem"]
+    params["grow_params"]["abg_biomass"]["max"] = params["grow_params"]["plant_part_max"]["leaf"] + params["grow_params"]["plant_part_max"]["stem"]
+    params["morph_params"]["canopy_area"]["min"] = params["morph_params"]["shoot_sys_width"]["min"]**2 * 0.25 * np.pi
+    params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
+    empirical_coeffs = {
+        "basal_dia_coeffs": {"a": 0.5093, "b": 0.47},
+        "height_coeffs": {"a": np.log(0.232995), "b": 0.619077},
+        "canopy_area_coeffs": {"a": np.log(0.23702483 * 0.2329925**0.9459644), "b": 0.72682 + (0.619077 * 0.9459644)},
+    }
+    yield Dimensional(params, empirical_coeffs)
+
+
+@pytest.fixture
+def dimensional_user(example_input_params):
+    params = example_input_params["BTS"]
+    params["morph_params"]["allometry_method"] = "user-defined"
+    params["grow_params"]["abg_biomass"] = {}
+    params["morph_params"]["canopy_area"] = {}
+    params["grow_params"]["abg_biomass"]["min"] = params["grow_params"]["plant_part_min"]["leaf"] + params["grow_params"]["plant_part_min"]["stem"]
+    params["grow_params"]["abg_biomass"]["max"] = params["grow_params"]["plant_part_max"]["leaf"] + params["grow_params"]["plant_part_max"]["stem"]
+    params["morph_params"]["canopy_area"]["min"] = params["morph_params"]["shoot_sys_width"]["min"]**2 * 0.25 * np.pi
+    params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
+    empirical_coeffs = {
+        "basal_dia_coeffs": {"a": 0.5093, "b": 0.47},
+        "height_coeffs": {"a": np.log(0.232995), "b": 0.619077},
+        "canopy_area_coeffs": {"a": np.log(0.23702483 * 0.2329925**0.9459644), "b": 0.72682 + (0.619077 * 0.9459644)},
+    }
+    yield Dimensional(params, empirical_coeffs)
+
+
+@pytest.fixture
+def habit_object(example_input_params):
+    params = example_input_params["BTS"]
+    params["grow_params"]["abg_biomass"] = {}
+    params["morph_params"]["canopy_area"] = {}
+    params["grow_params"]["abg_biomass"]["min"] = params["grow_params"]["plant_part_min"]["leaf"] + params["grow_params"]["plant_part_min"]["stem"]
+    params["grow_params"]["abg_biomass"]["max"] = params["grow_params"]["plant_part_max"]["leaf"] + params["grow_params"]["plant_part_max"]["stem"]
+    params["morph_params"]["canopy_area"]["min"] = params["morph_params"]["shoot_sys_width"]["min"]**2 * 0.25 * np.pi
+    params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
+    allometry = Biomass(params, empirical_coeffs={"root_dia_coeffs": {"a": 0.08, "b": 0.24}})
+    yield Habit(params, allometry, dt=1, green_parts=("leaf", "stem"))
+
+
+@pytest.fixture
+def graminoid_object(example_input_params):
+    params = example_input_params["BTS"]
+    params["grow_params"]["abg_biomass"] = {}
+    params["morph_params"]["canopy_area"] = {}
+    params["grow_params"]["abg_biomass"]["min"] = params["grow_params"]["plant_part_min"]["leaf"] + params["grow_params"]["plant_part_min"]["stem"]
+    params["grow_params"]["abg_biomass"]["max"] = params["grow_params"]["plant_part_max"]["leaf"] + params["grow_params"]["plant_part_max"]["stem"]
+    params["morph_params"]["canopy_area"]["min"] = params["morph_params"]["shoot_sys_width"]["min"]**2 * 0.25 * np.pi
+    params["morph_params"]["canopy_area"]["max"] = params["morph_params"]["shoot_sys_width"]["max"]**2 * 0.25 * np.pi
+    yield Graminoid(params, dt=1)
+
+
+@pytest.fixture
+def species_object(example_input_params, one_cell_grid):
+    dt = np.timedelta64(1, 'D')
+    yield Species(example_input_params["BTS"], one_cell_grid, dt=dt)
+
+
+@pytest.fixture
+def clonal(example_input_params):
+    example_input_params["BTS"]["grow_params"]["growth_biomass"] = {}
+    example_input_params["BTS"]["grow_params"]["growth_biomass"]["min"] = (
+        example_input_params["BTS"]["grow_params"]["plant_part_min"]["root"]
+        + example_input_params["BTS"]["grow_params"]["plant_part_min"]["leaf"]
+        + example_input_params["BTS"]["grow_params"]["plant_part_min"]["stem"]
+    )
+    yield Clonal(example_input_params["BTS"])

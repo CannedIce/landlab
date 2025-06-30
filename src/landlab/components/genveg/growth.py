@@ -168,10 +168,8 @@ class PlantGrowth(Species):
         """
         # Initialize species object to get correct species parameter list
         self._grid = grid
-        (_, _latitude) = self._grid.xy_of_reference
-        self._lat_rad = np.radians(_latitude)
         self.dt = dt
-        super().__init__(species_params, self._lat_rad, self.dt)
+        super().__init__(species_params, self._grid, self.dt)
         self.species_name = self.species_plant_factors["species"]
         self.time_ind = 1
         event_flags = self.set_event_flags(_current_jday)
@@ -248,7 +246,7 @@ class PlantGrowth(Species):
         mask_scalar = 1
         empty_list = []
         mask = []
-        for i in range(max_plants[0]):
+        for _ in range(max_plants[0]):
             empty_list.append(self.no_data_scalar)
             mask.append(mask_scalar)
         self.plants = np.ma.array(empty_list, mask=mask, dtype=self.dtypes)

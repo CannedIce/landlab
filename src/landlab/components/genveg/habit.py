@@ -27,6 +27,7 @@ class Habit:
         )
 
     def _calc_canopy_area_from_shoot_width(self, shoot_sys_width):
+        # instead of returning error, set to zero
         UnitTestChecks().is_negative_present(shoot_sys_width, "shoot_sys_width")
         canopy_area = 0.25 * np.pi * shoot_sys_width**2
         return canopy_area
@@ -76,14 +77,18 @@ class Habit:
         duration_params,
         dt,
         duration_val,
-        green_parts=(None),
+        green_parts=("leaf"),
     ):
         duration = {
-            "annual": Annual(species_grow_params, duration_params, dt),
+            "annual": Annual(
+                species_grow_params, duration_params, dt
+            ),
             "perennial deciduous": Deciduous(
                 species_grow_params, duration_params, dt, green_parts
             ),
-            "perennial evergreen": Evergreen(species_grow_params, duration_params, dt),
+            "perennial evergreen": Evergreen(
+                species_grow_params, duration_params, dt
+            ),
         }
         return duration[duration_val]
 
@@ -339,6 +344,8 @@ class Shrub(Habit):
         return plants
 
 
+"""
+This will be added later
 class Tree(Habit):
     def __init__(self, params, dt, empirical_coeffs={"root_dia_coeffs": {"a": 0.35, "b": 0.31, }}):
         green_parts = ("leaf")
@@ -355,3 +362,4 @@ class Vine(Habit):
         green_parts = ("leaf")
         allometry = self._select_allometry_class(params, empirical_coeffs)
         super().__init__(params, allometry, dt, green_parts)
+"""

@@ -18,3 +18,23 @@ def test_check_for_dispersal_success(
     # filter = np.nonzero(not np.isnan(example_plant_array["pup_x_loc"]))
     (dispersed_size,) = dispersed_plant_array.shape
     return example_plant_array.shape
+
+
+def test__init__(genveg_obj, one_cell_grid):
+    # test initialization routine - consider breaking this up
+    pass
+
+
+def test_calculate_grid_vars(genveg_obj, one_cell_grid):
+    pass
+
+
+def test_check_for_grid_fields(genveg_obj, one_cell_grid):
+    pass
+
+
+def test_run_one_step(genveg_obj, one_cell_grid, example_plant):
+    pass
+
+
+

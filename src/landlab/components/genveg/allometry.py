@@ -79,6 +79,7 @@ class Biomass:
         return (basal_dia, shoot_width, height)
 
     def calc_abg_biomass_from_dim(self, dim, var_name, cm=False):
+        # Use any dimension to estimate abg biomass
         abg_biomass = np.zeros_like(dim)
         filter = np.nonzero(dim > self.morph_params[var_name]["min"])
         if cm is True:
@@ -102,6 +103,7 @@ class Dimensional(Biomass):
         super().__init__(params, empirical_coeffs, cm)
 
     def calc_abg_dims(self, abg_biomass, cm=True):
+        # Calculate all abg dimensions from abg biomass
         basal_dia = np.zeros_like(abg_biomass)
         shoot_sys_width = np.zeros_like(abg_biomass)
         height = np.zeros_like(abg_biomass)
@@ -116,6 +118,7 @@ class Dimensional(Biomass):
         return (basal_dia, shoot_sys_width, height)
 
     def _calc_shoot_width_from_basal_dia(self, basal_dia, cm=False):
+        # Apply log-log linear relationship to estimate canopy width from basal d
         canopy_area = np.zeros_like(basal_dia)
         filter = np.nonzero(basal_dia > self.morph_params["basal_dia"]["min"])
         if cm is True:
@@ -127,6 +130,7 @@ class Dimensional(Biomass):
         return shoot_width
 
     def _calc_height_from_basal_dia(self, basal_dia, cm=False):
+        # Apply log-log linear relationship to estimate height from basal d
         height = np.zeros_like(basal_dia)
         filter = np.nonzero(basal_dia > self.morph_params["basal_dia"]["min"])
         if cm is True:
@@ -137,6 +141,7 @@ class Dimensional(Biomass):
         return height
 
     def _calc_basal_dia_from_shoot_width(self, shoot_width, cm=False):
+        # Apply log-log linear relationship to estimate basal d from canopy width
         basal_dia = np.zeros_like(shoot_width)
         filter = np.nonzero(shoot_width > self.morph_params["shoot_sys_width"]["min"])
         canopy_area = 0.25 * np.pi * shoot_width**2
@@ -148,6 +153,8 @@ class Dimensional(Biomass):
         return basal_dia
 
 
+"""
+Not implemented in this version but code preserved here for future use
 class Multi_Dimensional(Biomass):
     def __init__(self, params):
         # Not implemented yet but saved here for future versions allowing
@@ -180,3 +187,4 @@ class Multi_Dimensional(Biomass):
         c = self.morph_params["empirical_coeffs"][predict_var]["c"]
         ln_xs = (ln_zs - a - c * ln_ys) / b
         return np.exp(ln_xs)
+"""

@@ -12,19 +12,10 @@ from sympy import log
 from sympy import symbols
 
 from .check_objects import UnitTestChecks
-from .form import Bunch
-from .form import Colonizing
-from .form import Multiplestems
-from .form import Rhizomatous
-from .form import Singlecrown
-from .form import Singlestem
-from .form import Stoloniferous
-from .form import Thicketforming
+from .dispersal import Clonal, Seed, Random
 from .habit import Forbherb
 from .habit import Graminoid
 from .habit import Shrub
-from .habit import Tree
-from .habit import Vine
 from .photosynthesis import C3
 from .photosynthesis import C4
 from .photosynthesis import Cam
@@ -34,21 +25,25 @@ rng = np.random.default_rng()
 
 # Define species class that inherits composite class methods
 class Species:
-    def __init__(self, species_params, latitude, dt=1):
+    def __init__(self, species_params, grid, dt=1):
         self.dt = dt
+        extent = grid.extent
+        cell_area = grid.area_of_cell
+        reference = grid.xy_of_reference
+        _lat_rad = np.radians(reference[1])
         self.validate_plant_factors(species_params["plant_factors"])
         self.validate_duration_params(species_params["duration_params"])
         self.define_plant_parts(species_params)
         species_params = self.calculate_derived_params(species_params)
-        self.form = self.select_form_class(species_params)
         self.habit = self.select_habit_class(species_params)
-        self.photosynthesis = self.select_photosythesis_type(species_params, latitude)
+        self.photosynthesis = self.select_photosythesis_type(species_params, _lat_rad)
+        self.dispersal = self.select_dispersal_type(species_params, cell_area, extent, reference)
         # check these below to see if we need to save the composition dictionary not the original
         self.species_plant_factors = species_params["plant_factors"]
         self.species_duration_params = species_params["duration_params"]
         self.species_grow_params = species_params["grow_params"]
         self.species_photo_params = species_params["photo_params"]
-        self.species_dispersal_params = species_params["dispersal_params"]
+        self.species_dispersal_params = species_params["disperse_params"]
         self.species_mort_params = species_params["mortality_params"]
         self.species_morph_params = self.habit.morph_params
         self.populate_biomass_allocation_array()
@@ -56,20 +51,11 @@ class Species:
     def validate_plant_factors(self, plant_factors):
         plant_factor_options = {
             "species": [],
-            "growth_habit": ["forb_herb", "graminoid", "shrub", "tree", "vine"],
+            "growth_habit": ["forb_herb", "graminoid", "shrub"],
             "monocot_dicot": ["monocot", "dicot"],
             "angio_gymno": ["angiosperm", "gymnosperm"],
             "duration": ["annual", "perennial deciduous", "perennial evergreen"],
-            "growth_form": [
-                "bunch",
-                "colonizing",
-                "multiple_stems",
-                "rhizomatous",
-                "single_crown",
-                "single_stem",
-                "stoloniferous",
-                "thicket_forming",
-            ],
+            "reproductive_modes": ["clonal", "seed", "random"],
             "storage": ["aboveground", "belowground"],
             "p_type": ["C3", "C4", "Cam"],
         }
@@ -78,9 +64,14 @@ class Species:
             try:
                 opt_list = plant_factor_options[key]
                 if opt_list:
-                    if plant_factors[key] not in opt_list:
-                        msg = "Invalid " + str(key) + " option"
-                        raise ValueError(msg)
+                    msg = "Invalid " + str(key) + " option"
+                    if isinstance(plant_factors[key], str):
+                        if plant_factors[key] not in opt_list:
+                            raise ValueError(msg)
+                    elif isinstance(plant_factors[key], list):
+                        for item in plant_factors[key]:
+                            if item not in opt_list:
+                                raise ValueError(msg)
             except KeyError:
                 raise KeyError(
                     "Unexpected variable name in species parameter dictionary. Please check input parameter file"
@@ -275,30 +266,31 @@ class Species:
             latitude, photo_params=species_params["photo_params"]
         )
 
+    def select_dispersal_type(self, species_params, cell_area, extent, reference):
+        repro_modes = species_params["plant_factors"]["reproductive_modes"]
+        repro_options = {
+            "clonal": Clonal(species_params),
+            "seed": Seed(species_params, dt=self.dt),
+            "random": Random(species_params, cell_area, extent, reference)
+        }
+        dispersal_classes = []
+
+        for mode in repro_modes:
+            if mode in repro_options:
+                dispersal_classes.append(repro_options[mode])
+            else:
+                print(f"Warning: Invalid reproductive mode '{mode}'. Skipping.")
+
+        return dispersal_classes
+
     def select_habit_class(self, species_params):
         habit_type = species_params["plant_factors"]["growth_habit"]
         habit = {
             "forb_herb": Forbherb,
             "graminoid": Graminoid,
             "shrub": Shrub,
-            "tree": Tree,
-            "vine": Vine,
         }
         return habit[habit_type](species_params, self.dt)
-
-    def select_form_class(self, species_params):
-        form_type = species_params["plant_factors"]["growth_form"]
-        form = {
-            "bunch": Bunch,
-            "colonizing": Colonizing,
-            "multiple_stems": Multiplestems,
-            "rhizomatous": Rhizomatous,
-            "single_crown": Singlecrown,
-            "single_stem": Singlestem,
-            "stoloniferous": Stoloniferous,
-            "thicket_forming": Thicketforming,
-        }
-        return form[form_type](species_params)
 
     def populate_biomass_allocation_array(self):
         # This method precalculates the biomass allocation array based on plant
@@ -528,12 +520,10 @@ class Species:
         _new_biomass["stem_biomass"] = _new_stem_mass_frac * _total_biomass
         return _new_biomass
 
-    def branch(self):
-        self.form.branch()
-
-    def disperse(self, plants, jday):
+    def disperse(self, plants):
         # decide how to parameterize reproductive schedule, make repro event
-        plants = self.form.disperse(plants)
+        for disperse_method in self.dispersal:
+            plants = self.dispersal.disperse(plants)
         return plants
 
     def enter_dormancy(

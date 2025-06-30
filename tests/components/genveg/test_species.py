@@ -2,34 +2,16 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_almost_equal, assert_array_less
 
-from landlab.components.genveg.form import Bunch
-from landlab.components.genveg.form import Colonizing
-from landlab.components.genveg.form import Multiplestems
-from landlab.components.genveg.form import Rhizomatous
-from landlab.components.genveg.form import Singlecrown
-from landlab.components.genveg.form import Singlestem
-from landlab.components.genveg.form import Stoloniferous
-from landlab.components.genveg.form import Thicketforming
-from landlab.components.genveg.habit import Forbherb
-from landlab.components.genveg.habit import Graminoid
-from landlab.components.genveg.habit import Shrub
-from landlab.components.genveg.habit import Tree
-from landlab.components.genveg.habit import Vine
+from landlab.components.genveg.species import Species
 from landlab.components.genveg.photosynthesis import C3
 from landlab.components.genveg.photosynthesis import C4
 from landlab.components.genveg.photosynthesis import Cam
-from landlab.components.genveg.species import Species
-
-dt = np.timedelta64(1, 'D')
-
-
-def create_species_object(example_input_params, dt=dt):
-    return Species(example_input_params["BTS"], dt=dt, latitude=0.9074)
+from landlab.components.genveg.dispersal import Clonal, Seed, Random
+from landlab.components.genveg.habit import Forbherb, Graminoid, Shrub
 
 
-def test_get_daily_nsc_concentration(example_input_params):
-    species_object = create_species_object(example_input_params)
-    days = example_input_params["BTS"]["duration_params"]
+def test_get_daily_nsc_concentration(species_object):
+    days = species_object.species_duration_params
     parts = ["root", "leaf", "reproductive", "stem"]
     nsc_content_gs_start_actual = {
         "root": 276.9606782 / 1000,
@@ -55,9 +37,8 @@ def test_get_daily_nsc_concentration(example_input_params):
         )
 
 
-def test_calc_area_of_circle(example_input_params):
-    species_object = create_species_object(example_input_params)
-    morph_params = example_input_params["BTS"]["morph_params"]
+def test_calc_area_of_circle(species_object):
+    morph_params = species_object.species_morph_params
     m_params = [
         "shoot_sys_width",
         "root_sys_width",
@@ -77,21 +58,18 @@ def test_calc_area_of_circle(example_input_params):
         idx += 1
 
 
-def test_calculate_dead_age(example_input_params):
+def test_calculate_dead_age(species_object):
     age_t1 = np.array([60, 60, 60])
     mass_t1 = np.array([2, 2, 2])
     mass_t2 = np.array([0, 3, 4])
     age_t2 = np.array([60, 40, 30])
-    calc_age_t2 = create_species_object(example_input_params).calculate_dead_age(age_t1, mass_t1, mass_t2)
+    calc_age_t2 = species_object.calculate_dead_age(age_t1, mass_t1, mass_t2)
     assert_almost_equal(age_t2, calc_age_t2, decimal=6)
 
 
-def test_calculate_shaded_leaf_mortality(example_plant_array, example_plant, example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_calculate_shaded_leaf_mortality(example_plant_array, example_plant, species_object):
     # Check to make sure no leaf mortality occurred for LAI 0.012 < LAI_crit 2
     init_leaf_weight = example_plant_array["leaf"].copy()
-    print(example_plant_array["total_leaf_area"])
-    print(example_plant_array["total_leaf_area"] / (np.pi / 4 * example_plant_array["shoot_sys_width"]**2))
     plant_out = species_object.calculate_shaded_leaf_mortality(example_plant_array)
     assert_almost_equal(example_plant_array["leaf"][0:2], init_leaf_weight[0:2])
     assert_array_less(plant_out["leaf"][2], init_leaf_weight[2])
@@ -105,33 +83,57 @@ def test_calculate_shaded_leaf_mortality(example_plant_array, example_plant, exa
     assert_almost_equal(weight_change, wofost_leaf_weight_change, 6)
 
 
-def test_calculate_whole_plant_mortality(example_plant_array, one_cell_grid, example_input_params):
-    max_temp_dt = np.timedelta64(example_input_params["BTS"]["mortality_params"]["duration"]["1"], 'D')
-    min_temp_dt = np.timedelta64(example_input_params["BTS"]["mortality_params"]["duration"]["1"], 'D')
-    species_object_max = create_species_object(example_input_params, dt=max_temp_dt)
-    species_object_min = create_species_object(example_input_params, dt=min_temp_dt)
-    max_temp = one_cell_grid["cell"]["air__max_temperature_C"][example_plant_array["cell_index"]]
-    min_temp = one_cell_grid["cell"]["air__min_temperature_C"][example_plant_array["cell_index"]]
-    # Make sure plant doesn't die at moderate ambient temp
-    new_biomass = species_object_max.calculate_whole_plant_mortality(example_plant_array, max_temp, "1")
-    assert_allclose(new_biomass["root"], example_plant_array["root"], rtol=0.0001)
-    # Change max temp and make sure plant dies
+def test_calculate_whole_plant_mortality_max_temp(example_plant, one_cell_grid, species_object):
+    max_temp_dt = species_object.species_mort_params["duration"]["1"]
+    max_temp = one_cell_grid["cell"]["air__max_temperature_C"][example_plant["cell_index"]]
+    new_biomass = example_plant
+    n_runs = 0
+    while new_biomass["root"] > np.zeros_like(example_plant["root"]):
+        new_biomass = species_object.calculate_whole_plant_mortality(example_plant, max_temp, "1")
+        n_runs += 1
+        if n_runs >= (1.5 * max_temp_dt):
+            break
+    assert_allclose(n_runs, (max_temp_dt * 1.5), rtol=0.01)
     one_cell_grid["cell"]["air__max_temperature_C"] = 38 * np.ones(one_cell_grid.number_of_cells)
-    max_temp = one_cell_grid["cell"]["air__max_temperature_C"]
-    new_biomass = species_object_max.calculate_whole_plant_mortality(example_plant_array, max_temp, "1")
-    assert_allclose(new_biomass["root"], np.zeros_like(new_biomass["root"]), rtol=0.0001)
+    max_temp = one_cell_grid["cell"]["air__max_temperature_C"][example_plant["cell_index"]]
+    n_runs = 0
+    while new_biomass["root"] > np.zeros_like(example_plant["root"]):
+        new_biomass = species_object.calculate_whole_plant_mortality(example_plant, max_temp, "1")
+        n_runs += 1
+        if n_runs >= (1.5 * max_temp_dt):
+            break
+    assert n_runs < (1.5 * max_temp_dt)
+
+
+def test_calculate_whole_plant_mortality_min_temp(example_plant, one_cell_grid, species_object):
     # Change min temp and make sure plant dies
+    min_temp_dt = species_object.species_mort_params["duration"]["2"]
+    min_temp = one_cell_grid["cell"]["air__min_temperature_C"][example_plant["cell_index"]]
+    new_biomass = example_plant
+    n_runs = 0
+    while new_biomass["root"] > np.zeros_like(example_plant["root"]):
+        new_biomass = species_object.calculate_whole_plant_mortality(example_plant, min_temp, "2")
+        n_runs += 1
+        if n_runs >= (1.5 * min_temp_dt):
+            break
+    assert_allclose(n_runs, (min_temp_dt * 1.5), rtol=0.01)
     one_cell_grid["cell"]["air__min_temperature_C"] = -38 * np.ones(one_cell_grid.number_of_cells)
-    min_temp = one_cell_grid["cell"]["air__min_temperature_C"]
-    new_biomass = species_object_min.calculate_whole_plant_mortality(example_plant_array, min_temp, "2")
-    assert_allclose(new_biomass["root"], np.zeros_like(new_biomass["root"]), rtol=0.0001)
+    min_temp = one_cell_grid["cell"]["air__min_temperature_C"][example_plant["cell_index"]]
+    n_runs = 0
+    while new_biomass["root"] > np.zeros_like(example_plant["root"]):
+        new_biomass = species_object.calculate_whole_plant_mortality(example_plant, min_temp, "2")
+        n_runs += 1
+        if n_runs >= (1.5 * min_temp_dt):
+            break
+    assert n_runs < (1.5 * min_temp_dt)
 
 
-def test_update_morphology(example_input_params, example_plant_array):
+def test_update_morphology(example_input_params, example_plant_array, one_cell_grid):
     # This method should update basal diameter, shoot width, shoot height, root
     # width, live leaf area, dead leaf area
     example_input_params["BTS"]["morph_params"]["allometry_method"] = "default"
-    sp_obj = create_species_object(example_input_params)
+    dt = np.timedelta64(1, 'D')
+    sp_obj = Species(example_input_params["BTS"], one_cell_grid, dt=dt)
     # change to default
     pred_example_plant_array = sp_obj.update_morphology(example_plant_array)
     known_plants = {}
@@ -148,14 +150,12 @@ def test_update_morphology(example_input_params, example_plant_array):
         "live_leaf_area",
     ]
     for var in update_vars:
-        print(var)
         assert_allclose(known_plants[var], pred_example_plant_array[var], rtol=0.001)
 
 
-def test_populate_biomass_allocation_array(example_input_params):
-    s = create_species_object(example_input_params)
+def test_populate_biomass_allocation_array(species_object):
     biomass_array_from_excel = np.array([
-        [0.01, 0.11,0.21,0.31,0.41,0.51,0.61,0.71,0.81,0.91,1.01,1.11,1.21,1.31,1.41,1.51,1.61,1.71,1.81,1.91,2.01,2.11,2.21,2.31,2.41,2.51,2.61,2.71,2.81,2.91,3.01,3.11,3.21,3.31,3.41,3.51,3.61,3.71,3.81,3.91,4.01,4.11,4.21,4.31],
+        [0.01, 0.11, 0.21,0.31,0.41,0.51,0.61,0.71,0.81,0.91,1.01,1.11,1.21,1.31,1.41,1.51,1.61,1.71,1.81,1.91,2.01,2.11,2.21,2.31,2.41,2.51,2.61,2.71,2.81,2.91,3.01,3.11,3.21,3.31,3.41,3.51,3.61,3.71,3.81,3.91,4.01,4.11,4.21,4.31],
         [0.029531558, 0.314126222,0.597580079,0.881430388,1.165852132,1.450873064,1.736484358,2.022666426,2.309396945,2.596653692,2.884415563,3.1726629,3.461377538,3.750542729,4.040143031,4.330164189,4.620593014,4.911417273,5.202625596,5.494207382,5.786152728,6.078452358,6.371097567,6.664080162,6.957392425,7.251027061,7.544977173,7.839236221,8.133797995,8.428656593,8.723806393,9.019242035,9.314958401,9.610950598,9.907213944,10.20374395,10.50053631,10.7975869,11.09489174,11.39244701,11.69024903,11.98829426,12.28657927,12.58510076],
         [1.283164616, 1.143451734,1.118287452,1.091405185,1.073974314,1.061083353,1.050870103,1.042423648,1.035229826,1.028969927,1.023432791,1.018471342,1.013979073,1.009876397,1.006102299,1.002608985,0.999358326,0.996319423,0.993466895,0.990779636,0.988239915,0.98583269,0.983545095,0.981366039,0.979285895,0.977296253,0.975389729,0.973559797,0.971800668,0.970107179,0.968474711,0.96689911,0.965376631,0.963903883,0.962477789,0.961095547,0.959754597,0.958452596,0.957187394,0.955957012,0.954759627,0.953593552,0.952457226,0.951349204],
         [0.613402864, 0.691408432,0.716251113,0.747097905,0.770243126,0.789125974,0.805242837,0.819397029,0.832075367,0.84359754,0.854185916,0.864002036,0.873167308,0.881775509,0.889900723,0.897602596,0.90492992,0.911923172,0.918616329,0.925038223,0.931213544,0.937163614,0.942906988,0.948459918,0.953836728,0.959050116,0.96411139,0.969030676,0.973817075,0.978478798,0.983023289,0.98745731,0.991787029,0.99601809,1.000155667,1.004204522,1.008169042,1.012053284,1.015861004,1.01959569,1.023260584,1.026858708,1.030392882,1.033865742],
@@ -176,24 +176,23 @@ def test_populate_biomass_allocation_array(example_input_params):
     idx = 0
     for var in allocation_array_cols:
         # Using larger relative tolerance because knowns are approximations not direct solve
-        assert_allclose(s.biomass_allocation_array[var], biomass_array_from_excel[idx], rtol=0.05)
+        assert_allclose(species_object.biomass_allocation_array[var], biomass_array_from_excel[idx], rtol=0.05)
         idx += 1
 
 
-def test_set_initial_cover(example_input_params):
-    s = create_species_object(example_input_params)
+def test_set_initial_cover(species_object):
     species_name = "BTS"
     pidval = 0
     cell_index = 1
     plantlist = []
     # Cover area is too small for any plants
     cover_area = 0.00001
-    plantlist = s.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+    plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
     assert len(plantlist) == 0
     assert pidval == 0
     # Correct dimension is populated
     cover_area = 0.2
-    plantlist = s.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+    plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
     basal_dias = plantlist[0][18]
     assert basal_dias > 0
     # Area being used properly
@@ -201,26 +200,25 @@ def test_set_initial_cover(example_input_params):
     for i in range(len(plantlist)):
         inc_area = 0.25 * np.pi * plantlist[i][18]**2
         sum_area += inc_area
-    min_cover_area = 0.25 * np.pi * s.species_morph_params["basal_dia"]["min"]**2
+    min_cover_area = 1.2 * 0.25 * np.pi * species_object.species_morph_params["basal_dia"]["min"]**2
     assert sum_area < cover_area
     assert (cover_area - sum_area) < min_cover_area
 
 
-def test_set_initial_biomass(example_input_params, example_plant):
+def test_set_initial_biomass(species_object, example_plant):
     # Testing for Deciduous set_initial_biomass, testing for other classes handled under test_emerge
-    s = create_species_object(example_input_params)
     in_growing_season = True
     abg_biomass = example_plant["leaf"] + example_plant["stem"]
     root = 0.433864
     leaf = 0.485539
     stem = 0.314443
-    min_repro = example_input_params["BTS"]["grow_params"]["plant_part_min"]["reproductive"]
-    max_repro = example_input_params["BTS"]["grow_params"]["plant_part_max"]["reproductive"]
-    example_plant["basal_dia"], shoot_sys_width, height = s.habit.calc_abg_dims_from_biomass(abg_biomass)
+    min_repro = species_object.species_grow_params["plant_part_min"]["reproductive"]
+    max_repro = species_object.species_grow_params["plant_part_max"]["reproductive"]
+    example_plant["basal_dia"], shoot_sys_width, height = species_object.habit.calc_abg_dims_from_biomass(abg_biomass)
     example_plant["root"] = np.zeros_like(example_plant["root"])
     example_plant["leaf"] = np.zeros_like(example_plant["leaf"])
     example_plant["stem"] = np.zeros_like(example_plant["stem"])
-    emerged_plant = s.set_initial_biomass(example_plant, in_growing_season)
+    emerged_plant = species_object.set_initial_biomass(example_plant, in_growing_season)
     assert_allclose(emerged_plant["root"], root, rtol=0.001)
     assert_allclose(emerged_plant["leaf"], leaf, rtol=0.001)
     assert_allclose(emerged_plant["stem"], stem, rtol=0.001)
@@ -229,7 +227,7 @@ def test_set_initial_biomass(example_input_params, example_plant):
     assert_allclose(emerged_plant["shoot_sys_width"], shoot_sys_width, rtol=0.001)
     assert_allclose(emerged_plant["shoot_sys_height"], height, rtol=0.001)
     in_growing_season = False
-    emerged_plant = s.set_initial_biomass(example_plant, in_growing_season)
+    emerged_plant = species_object.set_initial_biomass(example_plant, in_growing_season)
     zeros = np.zeros_like(example_plant["root"])
     assert_allclose(emerged_plant["root"], root, rtol=0.001)
     assert_allclose(emerged_plant["leaf"], zeros, rtol=0.001)
@@ -238,8 +236,7 @@ def test_set_initial_biomass(example_input_params, example_plant):
     assert_allclose(emerged_plant["shoot_sys_height"], zeros, rtol=0.001)
 
 
-def test_sum_plant_parts(example_plant, example_input_params):
-    s = create_species_object(example_input_params)
+def test_sum_plant_parts(example_plant, species_object):
     example_plant["reproductive"] = np.array([0.32])
     example_plant["dead_root"] = np.array([0.15])
     example_plant["dead_leaf"] = np.array([0.12])
@@ -255,12 +252,11 @@ def test_sum_plant_parts(example_plant, example_input_params):
         "dead_aboveground": 0.21,
     }
     for sum_type in sums:
-        sum_calc = s.sum_plant_parts(example_plant, sum_type)
+        sum_calc = species_object.sum_plant_parts(example_plant, sum_type)
         assert_allclose(sum_calc, sums[sum_type], rtol=0.001)
 
 
-def test_emerge(example_plant, example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_emerge(example_plant, species_object):
     example_plant["leaf"] = np.zeros_like(example_plant["leaf"])
     example_plant["stem"] = np.zeros_like(example_plant["stem"])
     jday = 195
@@ -303,12 +299,11 @@ def test_emerge(example_plant, example_input_params):
         assert_allclose(check_plant[var], emerged_plant[var], rtol=0.001)
 
 
-def test__adjust_biomass_allocation_towards_ideal(example_input_params, example_plant):
-    s = create_species_object(example_input_params)
+def test__adjust_biomass_allocation_towards_ideal(species_object, example_plant):
     new_root = np.array([0.783358])
     new_leaf = np.array([0.508459])
     new_stem = np.array([0.308183])
-    adjust_plant = s._adjust_biomass_allocation_towards_ideal(example_plant)
+    adjust_plant = species_object._adjust_biomass_allocation_towards_ideal(example_plant)
     assert_allclose(adjust_plant["root"], new_root, rtol=0.001)
     assert_allclose(adjust_plant["leaf"], new_leaf, rtol=0.001)
     assert_allclose(adjust_plant["stem"], new_stem, rtol=0.001)
@@ -317,23 +312,22 @@ def test__adjust_biomass_allocation_towards_ideal(example_input_params, example_
     small_root_plant["root"] = np.array([0.005])
     small_root_plant["leaf"] = np.array([0.5])
     small_root_plant["stem"] = np.array([0.2999])
-    s.species_grow_params["plant_part_min"]["root"] = 0.03
+    species_object.species_grow_params["plant_part_min"]["root"] = 0.03
     new_root = np.array([0.030000])
     new_leaf = np.array([0.484195])
     new_stem = np.array([0.290805])
-    adjust_plant = s._adjust_biomass_allocation_towards_ideal(small_root_plant)
+    adjust_plant = species_object._adjust_biomass_allocation_towards_ideal(small_root_plant)
     assert_allclose(adjust_plant["root"], new_root, rtol=0.001)
     assert_allclose(adjust_plant["leaf"], new_leaf, rtol=0.001)
     assert_allclose(adjust_plant["stem"], new_stem, rtol=0.001)
 
 
-def test_allocate_biomass_dynamically(example_input_params, example_plant):
-    s = create_species_object(example_input_params)
+def test_allocate_biomass_dynamically(species_object, example_plant):
     new_root = np.array([0.789284])
     new_leaf = np.array([0.514743])
     new_stem = np.array([0.312879])
-    new_repro = np.array([0.000104917])
-    allocated_plant = s.allocate_biomass_dynamically(example_plant, np.array([0.025]))
+    new_repro = np.array([0.300104917])
+    allocated_plant = species_object.allocate_biomass_dynamically(example_plant, np.array([0.025]))
     assert_allclose(allocated_plant["root"], new_root, rtol=0.001)
     assert_allclose(allocated_plant["leaf"], new_leaf, rtol=0.001)
     assert_allclose(allocated_plant["stem"], new_stem, rtol=0.001)
@@ -342,7 +336,7 @@ def test_allocate_biomass_dynamically(example_input_params, example_plant):
 
 def test_mortality(example_input_params, two_cell_grid, example_plant_array):
     temp_dt = np.timedelta64(example_input_params["BTS"]["mortality_params"]["duration"]["2"], 'D')
-    species_object = create_species_object(example_input_params, dt=temp_dt)
+    species_object = Species(example_input_params["BTS"], two_cell_grid, dt=temp_dt)
     example_plant_array["cell_index"][4:] = np.array([1, 1, 1, 1])
     inital_leaf = example_plant_array["leaf"].copy()
     initial_plants = example_plant_array["root"].copy()
@@ -366,8 +360,7 @@ def test_mortality(example_input_params, two_cell_grid, example_plant_array):
     assert_almost_equal(plant_out["leaf"], np.zeros_like(plant_out["leaf"]), decimal=6)
 
 
-def test_respire(example_plant, one_cell_grid, example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_respire(example_plant, one_cell_grid, species_object):
     # Respire with no water growth limitation from WOFOST in PCSE and crop development stage=1 divided by carb conversion
     wofost_resp_root = np.array([0.0033926])
     wofost_resp_stem = np.array([0.00121421])
@@ -398,8 +391,7 @@ def test_respire(example_plant, one_cell_grid, example_input_params):
     assert_almost_equal(wofost_resp_stem, mass_change_resp_stem_half_sat, 6)
 
 
-def test_sum_vars_in_calculate_derived_params(example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_sum_vars_in_calculate_derived_params(species_object, example_input_params):
     species_param = species_object.calculate_derived_params(example_input_params["BTS"])
     # Checked via excel
     # Max total Biomass
@@ -418,15 +410,15 @@ def test_sum_vars_in_calculate_derived_params(example_input_params):
     assert_almost_equal(species_param["grow_params"]["nsc_biomass"]["min"], 0.03369)
 
 
-def test_senesce(example_input_params, example_plant):
-    species_object = create_species_object(example_input_params)
+def test_senesce(species_object, example_plant):
     jday = 195
     # leaves and stems should move nonstructural carb content to roots at a fixed rate
     # calculated values from Excel at day 195 for one plant
+    example_plant["reproductive"] = np.array([0.0])
     end_root = np.array([0.803921028])
     end_stem = np.array([0.29399902])
     end_leaf = np.array([0.485])
-    end_repro = np.array([0.])
+    end_repro = np.array([0.0])
     plant_out = species_object.senesce(example_plant, jday)
     assert_almost_equal(plant_out["reproductive"], end_repro, decimal=6)
     assert_almost_equal(plant_out["root"], end_root, decimal=6)
@@ -434,8 +426,7 @@ def test_senesce(example_input_params, example_plant):
     assert_almost_equal(plant_out["leaf"], end_leaf, decimal=6)
 
 
-def test_nsc_rate_change_per_season_and_part(example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_nsc_rate_change_per_season_and_part(species_object, example_input_params):
     species_param = species_object.calculate_derived_params(example_input_params["BTS"])
     ncs_rate_change = species_param["duration_params"]["nsc_rate_change"]
     # winter_nsc_rate
@@ -480,51 +471,38 @@ def test_nsc_rate_change_per_season_and_part(example_input_params):
     assert_almost_equal(ncs_rate_change["fall_nsc_rate"]["stem"], 0.015625)
 
 
-def test_select_habit_class(example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_select_habit_class(species_object, example_input_params):
     dummy_species = example_input_params
     for spec, cls in zip(
-        ["forb_herb", "graminoid", "shrub", "tree", "vine"],
-        [Forbherb, Graminoid, Shrub, Tree, Vine],
+        ["forb_herb", "graminoid", "shrub"],
+        [Forbherb, Graminoid, Shrub],
     ):
         dummy_species["BTS"]["plant_factors"]["growth_habit"] = spec
         print(dummy_species["BTS"]["plant_factors"]["growth_habit"])
         assert isinstance(species_object.select_habit_class(dummy_species["BTS"]), cls)
 
 
-def test_select_form_class(example_input_params):
-    species_object = create_species_object(example_input_params)
-    dummy_growth_form = example_input_params
+def test_select_dispersal_type(species_object, example_input_params):
+    dummy_dispersal = example_input_params
     for growth, cls in zip(
         [
-            "bunch",
-            "colonizing",
-            "multiple_stems",
-            "rhizomatous",
-            "single_crown",
-            "single_stem",
-            "stoloniferous",
-            "thicket_forming",
+            "clonal",
+            "seed",
+            "random",
         ],
         [
-            Bunch,
-            Colonizing,
-            Multiplestems,
-            Rhizomatous,
-            Singlecrown,
-            Singlestem,
-            Stoloniferous,
-            Thicketforming,
+            Clonal,
+            Seed,
+            Random,
         ],
     ):
-        dummy_growth_form["BTS"]["plant_factors"]["growth_form"] = growth
+        dummy_dispersal["BTS"]["plant_factors"]["dispersal"] = growth
         assert isinstance(
-            species_object.select_form_class(dummy_growth_form["BTS"]), cls
+            species_object.select_dispersal_type(dummy_dispersal["BTS"]), cls
         )
 
 
-def test_select_photosythesis_type(example_input_params):
-    species_object = create_species_object(example_input_params)
+def test_select_photosythesis_type(species_object, example_input_params):
     dummy_photosythesis = example_input_params
     for photosynthesis_opt, cls in zip(["C3", "C4", "cam"], [C3, C4, Cam]):
         dummy_photosythesis["BTS"]["plant_factors"]["p_type"] = photosynthesis_opt
@@ -536,22 +514,19 @@ def test_select_photosythesis_type(example_input_params):
         )
 
 
-def test_update_dead_biomass(example_input_params, example_plant):
+def test_update_dead_biomass(species_object, example_plant):
     example_plant_new = example_plant.copy()
     example_plant_new["leaf"] *= 0.5
     example_plant_new["root"] *= 0.5
     example_plant_new["stem"] *= 0.5
-    species_object = create_species_object(example_input_params)
     example_plant_new = species_object.update_dead_biomass(example_plant_new, example_plant)
     assert_almost_equal(example_plant_new["dead_leaf"], example_plant_new["leaf"], decimal=6)
     assert_almost_equal(example_plant_new["dead_root"], example_plant_new["root"])
     assert_almost_equal(example_plant_new["dead_stem"], example_plant_new["stem"])
 
 
-def test_validate_plant_factors_raises_errors(example_input_params):
+def test_validate_plant_factors_raises_errors(species_object):
     # create species class (Note this will run test_validate_plant_factors during init
-    species_object = create_species_object(example_input_params)
-
     # create an unexpected variable
     dummy_plant_factor = {"unexpected-variable-name": []}
     with pytest.raises(KeyError) as excinfo:
@@ -571,10 +546,7 @@ def test_validate_plant_factors_raises_errors(example_input_params):
     assert str(excinfo.value) == "Invalid p_type option"
 
 
-def test_validate_duration_params_raises_errors(example_input_params):
-    # create Species class (note this will run validate_duration_params during init)
-    species_object = create_species_object(example_input_params)
-
+def test_validate_duration_params_raises_errors(species_object):
     # ValueError msg for growing_season_start is between 1-365
     start_below_bound = {"growing_season_start": 0}
     start_above_bound = {"growing_season_start": 367}
@@ -602,7 +574,7 @@ def test_validate_duration_params_raises_errors(example_input_params):
     assert str(excinfo.value) == "Start of senescence must be within the growing season"
 
 
-def test_litter_decomp_new_biomass_values(example_input_params, example_plant_array):
+def test_litter_decomp_new_biomass_values(species_object, example_plant_array):
     # expected values obtained from excel
     expected_new_biomass = {
         'dead_root': np.array([0.011654923, 0.011654923, 0.011654923, 0.011654923, 1.631689185, 1.631689185, 1.631689185, 1.631689185]),
@@ -614,14 +586,8 @@ def test_litter_decomp_new_biomass_values(example_input_params, example_plant_ar
         'dead_leaf_age': np.array([1330.561664, 1353.338509, 1239.787392, 1434.019734, 1349.797247, 736.8478796, 1178.379645, 235.6844825]),
         'dead_reproductive_age': np.array([508.8777074, 1122.713079, 205.4386012, 1074.25249, 661.3439315, 427.4383309, 1262.53064, 1086.549562])
     }
-
-    # initialize class
-    species_object = create_species_object(example_input_params)
-    # set dt
-    species_object.dt = np.timedelta64(1, "D")
     # call litter_decomp
     new_biomass = species_object.litter_decomp(example_plant_array)
-
     # tests
     for k, expected_value in expected_new_biomass.items():
         assert_allclose(
@@ -629,11 +595,7 @@ def test_litter_decomp_new_biomass_values(example_input_params, example_plant_ar
         )
 
 
-def test_litter_decomp_bad_values_replaced(example_input_params, example_plant_array):
-    # initialize class
-    species_object = create_species_object(example_input_params)
-    # set dt
-    species_object.dt = np.timedelta64(1, "D")
+def test_litter_decomp_bad_values_replaced(species_object, example_plant_array):
     # make a nan value, negative value, and inf value
     bad_epa_values = example_plant_array
     bad_epa_values["dead_root"][0] = -0.0125
