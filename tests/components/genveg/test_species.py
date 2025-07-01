@@ -482,24 +482,21 @@ def test_select_habit_class(species_object, example_input_params):
         assert isinstance(species_object.select_habit_class(dummy_species["BTS"]), cls)
 
 
-def test_select_dispersal_type(species_object, example_input_params):
+def test_select_dispersal_type(species_object, example_input_params, one_cell_grid):
     dummy_dispersal = example_input_params
     for growth, cls in zip(
-        [
-            "clonal",
-            "seed",
-            "random",
-        ],
-        [
-            Clonal,
-            Seed,
-            Random,
-        ],
+        ["clonal", "seed", "random",],
+        [Clonal, Seed, Random,],
     ):
-        dummy_dispersal["BTS"]["plant_factors"]["dispersal"] = growth
-        assert isinstance(
-            species_object.select_dispersal_type(dummy_dispersal["BTS"]), cls
+        dummy_dispersal["BTS"]["plant_factors"]["reproductive_modes"] = [growth]
+        dispersal_classes = species_object.select_dispersal_type(
+            dummy_dispersal["BTS"],
+            one_cell_grid.area_of_cell,
+            one_cell_grid.extent,
+            one_cell_grid.xy_of_reference,
         )
+        for dispersal_class in dispersal_classes:
+            assert isinstance(dispersal_class, cls)
 
 
 def test_select_photosythesis_type(species_object, example_input_params):

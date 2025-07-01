@@ -84,7 +84,7 @@ class Seed(Repro):
         if plants["dispersal"]["seedling_reserve"] >= 1:
             num_seedlings += np.floor(plants["dispersal"]["seedling_reserve"])
             plants["dispersal"]["seedling_reserve"] -= np.floor(plants["dispersal"]["seedling_reserve"])
-        # Loop through each plant to 
+        # Loop through each plant to assign seedling locations
         for i in range(plants.size):
             dist_from_plant = rng.lognormal(self.mean_dispersal_distance, self.dispersal_shape, num_seedlings[i])
             dist_from_plant[dist_from_plant > self.max_dispersal_distance] = 0.0
@@ -112,17 +112,17 @@ class Random(Repro):
         )
 
     def disperse(self, plants):
-        filter = (rng.uniform(0, 1, size=plants["root"]) > (self.daily_col_prob * self.cell_area))
-        plants["dispersal"]["rand_x_loc"] = rng.uniform(
+        filter = (rng.uniform(0, 1, size=plants["root"].size) > (self.daily_col_prob * self.cell_area))
+        plants["dispersal"]["rand_x_loc"][:, 0] = rng.uniform(
             low=self.grid_boundary[0],
             high=self.grid_boundary[1],
-            size=plants["root"]
+            size=plants["root"].size
         )
-        plants["dispersal"]["rand_y_loc"] = rng.uniform(
+        plants["dispersal"]["rand_y_loc"][:, 0] = rng.uniform(
             low=self.grid_boundary[2],
             high=self.grid_boundary[3],
-            size=plants["root"]
+            size=plants["root"].size
         )
-        plants["dispersal"]["rand_x_loc"][filter] = 0.0
-        plants["dispersal"]["rand_y_loc"][filter] = 0.0
+        plants["dispersal"]["rand_x_loc"][filter] = np.nan
+        plants["dispersal"]["rand_y_loc"][filter] = np.nan
         return plants

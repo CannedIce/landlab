@@ -206,9 +206,16 @@ class PlantGrowth(Species):
             np.nan,
             np.nan,
             999999,
-            np.nan,
-            np.nan,
-            np.nan,
+            (
+                np.nan,
+                np.nan,
+                np.nan,
+                [np.nan],
+                [np.nan],
+                np.nan,
+                [np.nan],
+                [np.nan],
+            ),
             999999,
         )
         self.dtypes = [
@@ -222,8 +229,8 @@ class PlantGrowth(Species):
             (("stem", "stem_biomass"), float),
             (("reproductive", "repro_biomass"), float),
             ("dead_root", float),
-            ("dead_leaf", float),
             ("dead_stem", float),
+            ("dead_leaf", float),
             ("dead_reproductive", float),
             ("dead_root_age", float),
             ("dead_leaf_age", float),
@@ -238,9 +245,16 @@ class PlantGrowth(Species):
             ("live_leaf_area", float),
             ("plant_age", float),
             ("n_stems", int),
-            ("pup_x_loc", float),
-            ("pup_y_loc", float),
-            ("pup_cost", float),
+            ("dispersal", [
+                ("pup_x_loc", float),
+                ("pup_y_loc", float),
+                ("pup_cost", float),
+                ("seedling_x_loc", float, (10,)),
+                ("seedling_y_loc", float, (10,)),
+                ("seedling_reserve", float),
+                ("rand_x_loc", float, (10,)),
+                ("rand_y_loc", float, (10,)),
+            ]),
             ("item_id", int),
         ]
         mask_scalar = 1
@@ -250,10 +264,12 @@ class PlantGrowth(Species):
             empty_list.append(self.no_data_scalar)
             mask.append(mask_scalar)
         self.plants = np.ma.array(empty_list, mask=mask, dtype=self.dtypes)
-        self.plants.fill_value = self.no_data_scalar
+        self.plants[:] = self.no_data_scalar
+        print("Passed plant array")
+        print(kwargs["plant_array"])
         try:
-            (init_plants, self.n_plants) = kwargs.get(
-                ("plant_array", "n_plants"),
+            init_plants = kwargs.get(
+                "plant_array",
                 self._init_plants_from_grid(
                     _in_growing_season, kwargs["species_cover"]
                 ),
@@ -261,7 +277,7 @@ class PlantGrowth(Species):
         except KeyError:
             msg = "GenVeg requires a pre-populated plant array or a species cover."
             raise ValueError(msg)
-
+        self.n_plants = init_plants.size
         self.plants[: self.n_plants] = init_plants
 
         self.call = []
@@ -617,7 +633,7 @@ class PlantGrowth(Species):
                     plantlist = self.set_initial_cover(cover_area, plant, pidval, cell_index, plantlist)
         plant_array = np.array(plantlist, dtype=self.dtypes)
         plant_array = self.set_initial_biomass(plant_array, in_growing_season)
-        return (plant_array, pidval)
+        return plant_array
 
     def set_event_flags(self, _current_jday):
         """

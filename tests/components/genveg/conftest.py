@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 
 from landlab import RasterModelGrid
+from landlab.components.genveg.integrator import GenVeg
+from landlab.components.genveg.growth import PlantGrowth
 from landlab.components.genveg.allometry import Biomass, Dimensional
 from landlab.components.genveg.duration import Annual, Deciduous, Evergreen
 from landlab.components.genveg.habit import Habit, Graminoid
@@ -372,8 +374,8 @@ def example_plant_array(set_random_seed):
             ("seedling_x_loc", float, (10,)),
             ("seedling_y_loc", float, (10,)),
             ("seedling_reserve", float),
-            ("random_x_loc", float, (10,)),
-            ("random_y_loc", float, (10,)),
+            ("rand_x_loc", float, (10,)),
+            ("rand_y_loc", float, (10,)),
         ]),
         ("item_id", int),
     ]
@@ -633,3 +635,57 @@ def clonal(example_input_params):
         + example_input_params["BTS"]["grow_params"]["plant_part_min"]["stem"]
     )
     yield Clonal(example_input_params["BTS"])
+
+
+@pytest.fixture
+def random(example_input_params, one_cell_grid):
+    example_input_params["BTS"]["grow_params"]["growth_biomass"] = {}
+    example_input_params["BTS"]["grow_params"]["growth_biomass"]["min"] = (
+        example_input_params["BTS"]["grow_params"]["plant_part_min"]["root"]
+        + example_input_params["BTS"]["grow_params"]["plant_part_min"]["leaf"]
+        + example_input_params["BTS"]["grow_params"]["plant_part_min"]["stem"]
+    )
+    cell_area = one_cell_grid.area_of_cell
+    extent = one_cell_grid.extent
+    reference = one_cell_grid.xy_of_reference
+    yield Random(example_input_params["BTS"], cell_area, extent, reference)
+
+
+@pytest.fixture
+def seed(example_input_params, one_cell_grid):
+    example_input_params["BTS"]["grow_params"]["growth_biomass"] = {}
+    example_input_params["BTS"]["grow_params"]["growth_biomass"]["min"] = (
+        example_input_params["BTS"]["grow_params"]["plant_part_min"]["root"]
+        + example_input_params["BTS"]["grow_params"]["plant_part_min"]["leaf"]
+        + example_input_params["BTS"]["grow_params"]["plant_part_min"]["stem"]
+    )
+    dt = np.timedelta64(1, 'D')
+    yield Seed(example_input_params["BTS"], dt)
+
+
+@pytest.fixture
+def growth_obj(one_cell_grid, example_input_params, example_plant_array):
+    dt = np.timedelta64(1, 'D')
+    jday = 195
+    rel_time = 194
+    yield PlantGrowth(
+        one_cell_grid,
+        dt,
+        rel_time,
+        jday,
+        species_params=example_input_params["BTS"],
+        plant_array=example_plant_array,
+    )
+
+
+@pytest.fixture
+def genveg_obj(one_cell_grid, example_input_params, example_plant_array):
+    dt = np.timedelta64(1, 'D')
+    current_day = np.datetime64("2019-07-14", "D")
+    yield GenVeg(
+        one_cell_grid,
+        dt,
+        current_day,
+        example_input_params,
+        plant_array=example_plant_array
+    )
