@@ -46,7 +46,8 @@ class GenVeg(Component, PlantGrowth):
     }
 
     def __init__(
-        self, grid, dt, current_day, vegparams, plant_array=np.empty((0, 30), dtype=[])
+        #self, grid, dt, current_day, vegparams, plant_array=np.empty((0, 28), dtype=[])
+        self, grid, dt, current_day, vegparams, **kwargs
     ):
         # save grid object to class
         super().__init__(grid)
@@ -70,7 +71,10 @@ class GenVeg(Component, PlantGrowth):
         _ = self._grid.add_zeros("vegetation__n_plants", at="cell", clobber=True)
         _ = self._grid.add_zeros("vegetation__plant_height", at="cell", clobber=True)
         _ = self._grid.add_zeros("vegetation__lai", at="cell", clobber=True)
-
+        """
+        This is being instantiated incorrectly. We need to check the kwarg for a list containing
+        the plant arrays and then instantiate if it doesn't exist
+        """
         # Instantiate a PlantGrowth object and
         # summarize number of plants and biomass per cell
         if plant_array.size == 0:
@@ -487,17 +491,17 @@ class GenVeg(Component, PlantGrowth):
         return is_center_unocc
 
     def check_for_dispersal_success(self, all_plants):
-        new_pups = all_plants[~np.isnan(all_plants["pup_x_loc"])]
+        new_pups = all_plants[~np.isnan(all_plants["dispersal"]["pup_x_loc"])]
 
         if new_pups.size != 0:
-            pup_locs = tuple(zip(new_pups["pup_x_loc"], new_pups["pup_y_loc"]))
-            pup_widths = np.zeros_like(new_pups["pup_x_loc"])
+            pup_locs = tuple(zip(new_pups["dispersal"]["pup_x_loc"], new_pups["dispersal"]["pup_y_loc"]))
+            pup_widths = np.zeros_like(new_pups["dispersal"]["pup_x_loc"])
             loc_unoccupied = self.check_if_loc_unocc(
                 pup_locs, pup_widths, all_plants, "below"
             )
             new_pups = new_pups[np.nonzero(loc_unoccupied)]
-            new_pups["x_loc"] = new_pups["pup_x_loc"]
-            new_pups["y_loc"] = new_pups["pup_y_loc"]
+            new_pups["x_loc"] = new_pups["dispersal"]["pup_x_loc"]
+            new_pups["y_loc"] = new_pups["dispersal"]["pup_y_loc"]
 
         for species_obj in self.plant_species:
             species = species_obj.species_name
@@ -522,7 +526,7 @@ class GenVeg(Component, PlantGrowth):
                     species_new_pups["root"]
                     + species_new_pups["leaf"]
                     + species_new_pups["stem"]
-                    + species_parents["pup_cost"]
+                    + species_parents["dispersal"]["pup_cost"]
                 )
 
                 species_obj.update_plants(
@@ -543,8 +547,8 @@ class GenVeg(Component, PlantGrowth):
                         np.full_like(species_plants["root"], np.nan),
                     )
                 ),
+                subarray="dispersal"
             )
-
         return self.combine_plant_arrays()
 
     def combine_plant_arrays(self):

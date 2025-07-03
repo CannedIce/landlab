@@ -265,13 +265,15 @@ class PlantGrowth(Species):
             mask.append(mask_scalar)
         self.plants = np.ma.array(empty_list, mask=mask, dtype=self.dtypes)
         self.plants[:] = self.no_data_scalar
-        print("Passed plant array")
-        print(kwargs["plant_array"])
+        species_cover = kwargs.get(
+            "species_cover",
+            np.zeros_like(self._grid["cell"]["vegetation__total_biomass"])
+        )
         try:
             init_plants = kwargs.get(
                 "plant_array",
                 self._init_plants_from_grid(
-                    _in_growing_season, kwargs["species_cover"]
+                    _in_growing_season, species_cover
                 ),
             )
         except KeyError:
@@ -409,11 +411,16 @@ class PlantGrowth(Species):
     def species_get_variable(self, var_name):
         return self.species_grow_params
 
-    def update_plants(self, var_names, pids, var_vals):
-        for idx, var_name in enumerate(var_names):
-            self.plants[var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
-        return self.plants
-
+    def update_plants(self, var_names, pids, var_vals, subarray=None):
+        if subarray is None:
+            for idx, var_name in enumerate(var_names):
+                self.plants[var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
+            return self.plants
+        else:
+            for idx, var_name in enumerate(var_names):
+                self.plants[subarray][var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
+            return self.plants
+        
     def add_new_plants(self, new_plants_list, _rel_time):
 
         # Reassess this. We need the INDEX of the last nanmax PID

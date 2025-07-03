@@ -496,6 +496,12 @@ def one_cell_grid():
         at="cell",
     )
     _ = grid.add_field(
+        "vegetation__total_biomass",
+        np.zeros(grid.number_of_cells),
+        at="cell",
+        units="g",
+    )
+    _ = grid.add_field(
         "soil_water__volume_fraction",
         water_content * np.ones(grid.number_of_cells),
         at="cell",
@@ -537,6 +543,12 @@ def two_cell_grid():
         "vegetation__plant_species",
         np.full(grid.number_of_cells, "Corn"),
         at="cell",
+    )
+    _ = grid.add_field(
+        "vegetation__total_biomass",
+        np.zeros(grid.number_of_cells),
+        at="cell",
+        units="g",
     )
     _ = grid.add_field(
         "soil_water__volume_fraction",
@@ -668,13 +680,14 @@ def growth_obj(one_cell_grid, example_input_params, example_plant_array):
     dt = np.timedelta64(1, 'D')
     jday = 195
     rel_time = 194
+    array = example_plant_array.copy()
     yield PlantGrowth(
         one_cell_grid,
         dt,
         rel_time,
         jday,
         species_params=example_input_params["BTS"],
-        plant_array=example_plant_array,
+        plant_array=array,
     )
 
 
