@@ -168,10 +168,8 @@ class PlantGrowth(Species):
         """
         # Initialize species object to get correct species parameter list
         self._grid = grid
-        (_, _latitude) = self._grid.xy_of_reference
-        self._lat_rad = np.radians(_latitude)
         self.dt = dt
-        super().__init__(species_params, self._lat_rad, self.dt)
+        super().__init__(species_params, self._grid, self.dt)
         self.species_name = self.species_plant_factors["species"]
         self.time_ind = 1
         event_flags = self.set_event_flags(_current_jday)
@@ -208,9 +206,16 @@ class PlantGrowth(Species):
             np.nan,
             np.nan,
             999999,
-            np.nan,
-            np.nan,
-            np.nan,
+            (
+                np.nan,
+                np.nan,
+                np.nan,
+                [np.nan],
+                [np.nan],
+                np.nan,
+                [np.nan],
+                [np.nan],
+            ),
             999999,
         )
         self.dtypes = [
@@ -224,8 +229,8 @@ class PlantGrowth(Species):
             (("stem", "stem_biomass"), float),
             (("reproductive", "repro_biomass"), float),
             ("dead_root", float),
-            ("dead_leaf", float),
             ("dead_stem", float),
+            ("dead_leaf", float),
             ("dead_reproductive", float),
             ("dead_root_age", float),
             ("dead_leaf_age", float),
@@ -240,30 +245,41 @@ class PlantGrowth(Species):
             ("live_leaf_area", float),
             ("plant_age", float),
             ("n_stems", int),
-            ("pup_x_loc", float),
-            ("pup_y_loc", float),
-            ("pup_cost", float),
+            ("dispersal", [
+                ("pup_x_loc", float),
+                ("pup_y_loc", float),
+                ("pup_cost", float),
+                ("seedling_x_loc", float, (10,)),
+                ("seedling_y_loc", float, (10,)),
+                ("seedling_reserve", float),
+                ("rand_x_loc", float, (10,)),
+                ("rand_y_loc", float, (10,)),
+            ]),
             ("item_id", int),
         ]
         mask_scalar = 1
         empty_list = []
         mask = []
-        for i in range(max_plants[0]):
+        for _ in range(max_plants[0]):
             empty_list.append(self.no_data_scalar)
             mask.append(mask_scalar)
         self.plants = np.ma.array(empty_list, mask=mask, dtype=self.dtypes)
-        self.plants.fill_value = self.no_data_scalar
+        self.plants[:] = self.no_data_scalar
+        species_cover = kwargs.get(
+            "species_cover",
+            np.zeros_like(self._grid["cell"]["vegetation__total_biomass"])
+        )
         try:
-            (init_plants, self.n_plants) = kwargs.get(
-                ("plant_array", "n_plants"),
+            init_plants = kwargs.get(
+                "plant_array",
                 self._init_plants_from_grid(
-                    _in_growing_season, kwargs["species_cover"]
+                    _in_growing_season, species_cover
                 ),
             )
         except KeyError:
             msg = "GenVeg requires a pre-populated plant array or a species cover."
             raise ValueError(msg)
-
+        self.n_plants = init_plants.size
         self.plants[: self.n_plants] = init_plants
 
         self.call = []
@@ -395,11 +411,16 @@ class PlantGrowth(Species):
     def species_get_variable(self, var_name):
         return self.species_grow_params
 
-    def update_plants(self, var_names, pids, var_vals):
-        for idx, var_name in enumerate(var_names):
-            self.plants[var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
-        return self.plants
-
+    def update_plants(self, var_names, pids, var_vals, subarray=None):
+        if subarray is None:
+            for idx, var_name in enumerate(var_names):
+                self.plants[var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
+            return self.plants
+        else:
+            for idx, var_name in enumerate(var_names):
+                self.plants[subarray][var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
+            return self.plants
+        
     def add_new_plants(self, new_plants_list, _rel_time):
 
         # Reassess this. We need the INDEX of the last nanmax PID
@@ -619,7 +640,7 @@ class PlantGrowth(Species):
                     plantlist = self.set_initial_cover(cover_area, plant, pidval, cell_index, plantlist)
         plant_array = np.array(plantlist, dtype=self.dtypes)
         plant_array = self.set_initial_biomass(plant_array, in_growing_season)
-        return (plant_array, pidval)
+        return plant_array
 
     def set_event_flags(self, _current_jday):
         """

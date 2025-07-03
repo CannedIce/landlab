@@ -208,9 +208,10 @@ class Deciduous(Perennial):
         )
 
     def emerge(self, plants, available_mass, persistent_total_mass):
-        print("I emerge from dormancy and I am a deciduous perennial")
-        # next steps are to clean this up using same approach as dormancy
-
+        """
+        This method allows deciduous perennial plants to emerge from dormancy
+        using non-structural biomass stored in the persistent parts of the plant.
+        """
         total_mass_new_green = np.zeros_like(plants["root_biomass"])
         new_green_biomass = {}
         for part in self.green_parts:
