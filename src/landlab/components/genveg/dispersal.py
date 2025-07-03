@@ -71,28 +71,31 @@ class Seed(Repro):
         biomass in the reproductive organ system.
         """
         # Tracking max seeds that can be produced based on reproductive mass available
-        max_seeds = plants["reproductive"] * self.seed_size * self.seed_efficiency
+        max_seeds = np.floor(plants["reproductive"] / (self.seed_size * self.seed_efficiency))
         # Partial seedlings are banked to accomodate species with low seedling production rates
-        num_seedlings, reserve_part = np.modf(
+        reserve_part, num_seedlings = np.modf(
             (total_biomass * self.biomass_to_seedlings * self.dt.astype(int)),
-            out=np.zeros_like(plants["reproductive"]),
+            out=(np.zeros_like(plants["reproductive"]), np.zeros_like(plants["reproductive"])),
             where=(total_biomass >= self.min_size_for_repro)
         )
         num_seedlings[num_seedlings > max_seeds] = max_seeds
-        plants["reproductive"] -= num_seedlings * self.seed_size * self.seed_efficiency
+        plants["reproductive"] -= num_seedlings * self.seed_size / self.seed_efficiency
         plants["dispersal"]["seedling_reserve"] += reserve_part
         if plants["dispersal"]["seedling_reserve"] >= 1:
             num_seedlings += np.floor(plants["dispersal"]["seedling_reserve"])
             plants["dispersal"]["seedling_reserve"] -= np.floor(plants["dispersal"]["seedling_reserve"])
         # Loop through each plant to assign seedling locations
         for i in range(plants.size):
-            dist_from_plant = rng.lognormal(self.mean_dispersal_distance, self.dispersal_shape, num_seedlings[i])
+            count = num_seedlings[i].astype(int)
+            if count == 0:
+                break
+            dist_from_plant = rng.lognormal(self.mean_dispersal_distance, self.dispersal_shape, size=count)
             dist_from_plant[dist_from_plant > self.max_dispersal_distance] = 0.0
-            pup_azimuth = np.deg2rad(rng.uniform(low=0.01, high=360, size=num_seedlings[i]))
-            plants["dispersal"]["seedling_x_loc"][i][:num_seedlings[i]] = (
+            pup_azimuth = np.deg2rad(rng.uniform(low=0.01, high=360, size=count))
+            plants["dispersal"]["seedling_x_loc"][i][:count] = (
                 dist_from_plant * np.cos(pup_azimuth) + plants["x_loc"][i]
             )
-            plants["dispersal"]["seedling_y_loc"][i][:num_seedlings[i]] = (
+            plants["dispersal"]["seedling_y_loc"][i][:count] = (
                 dist_from_plant * np.sin(pup_azimuth) + plants["y_loc"][i]
             )
         return plants
