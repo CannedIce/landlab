@@ -457,7 +457,6 @@ def example_plant_array(set_random_seed):
     plants["dispersal"]["pup_x_loc"][plants["reproductive"] > 0.1] = 0.1
     plants["dispersal"]["pup_y_loc"][plants["reproductive"] > 0.1] = 0.2
     plants["dispersal"]["pup_cost"][plants["reproductive"] > 0.1] = 0.75
-    plants["item_id"] = np.array([1, 2, 3, 4, 5, 6, 7, 8])
     return plants
 
 

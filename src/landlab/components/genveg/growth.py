@@ -405,11 +405,8 @@ class PlantGrowth(Species):
         self.delta_tot = []
 
     def species_plants(self):
-        unmasked_rows = np.nonzero(self.plants["pid"] >= 0)
-        return self.plants[unmasked_rows].filled()
-
-    def species_get_variable(self, var_name):
-        return self.species_grow_params
+        unmasked_rows = np.nonzero(self.plants["pid"] != 999999)
+        return self.plants[unmasked_rows]
 
     def update_plants(self, var_names, pids, var_vals, subarray=None):
         if subarray is None:
@@ -422,7 +419,6 @@ class PlantGrowth(Species):
             return self.plants
         
     def add_new_plants(self, new_plants_list, _rel_time):
-
         # Reassess this. We need the INDEX of the last nanmax PID
         last_pid = np.ma.max(self.plants["pid"])
         pids = np.arange(last_pid + 1, last_pid + 1 + new_plants_list.size)
@@ -650,8 +646,13 @@ class PlantGrowth(Species):
         durationdict = self.species_duration_params
         flags_to_test = {
             "_in_growing_season": bool(
-                (_current_jday > durationdict["growing_season_start"])
-                & (_current_jday < durationdict["growing_season_end"])
+                (
+                    (_current_jday > durationdict["growing_season_start"])
+                    & (_current_jday < durationdict["growing_season_end"])
+                )
+                or (np.isnan(durationdict["growing_season_start"])
+                    or np.isnan(durationdict["growing_season_end"])
+                    )
             ),
             "_is_emergence_day": bool(
                 _current_jday == durationdict["growing_season_start"]
@@ -703,7 +704,7 @@ class PlantGrowth(Species):
         )
         self.plants[remove_plants] = self.no_data_scalar
         self.plants[remove_plants] = np.ma.masked
-        remove_array_length = np.count_nonzero(remove_plants)
+        remove_array_length = np.size(remove_plants)
         self.n_plants -= remove_array_length
         return self.plants, self.n_plants
 
