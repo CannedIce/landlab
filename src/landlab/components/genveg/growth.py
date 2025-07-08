@@ -265,6 +265,7 @@ class PlantGrowth(Species):
             mask.append(mask_scalar)
         self.plants = np.ma.array(empty_list, mask=mask, dtype=self.dtypes)
         self.plants[:] = self.no_data_scalar
+        self.plants[:] = np.ma.masked
         species_cover = kwargs.get(
             "species_cover",
             np.zeros_like(self._grid["cell"]["vegetation__total_biomass"])
@@ -399,10 +400,6 @@ class PlantGrowth(Species):
             },
         )
         self.plants["item_id"][: self.n_plants] = self.record_plants.item_coordinates
-        # Set constants for PAR formula
-        self._wgaus = [0.2778, 0.4444, 0.2778]
-        self._xgaus = [0.1127, 0.5, 0.8873]
-        self.delta_tot = []
 
     def species_plants(self):
         unmasked_rows = np.nonzero(self.plants["pid"] != 999999)
