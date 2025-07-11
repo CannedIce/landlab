@@ -22,6 +22,9 @@ class Biomass:
                 params["morph_params"]["empirical_coeffs"][x[1]] = {}
                 x_min = params["morph_params"][x[0]]["min"]
                 x_max = params["morph_params"][x[0]]["max"]
+                if x_min == x_max:
+                    msg = f"GenVeg cannot determine min-max allometry relationship. Min and max values for {x[0]} are equal."
+                    raise ValueError(msg)
                 a, b = self._calc2_allometry_coeffs(
                     x_min, x_max, self.abg_biomass["min"], self.abg_biomass["max"]
                 )

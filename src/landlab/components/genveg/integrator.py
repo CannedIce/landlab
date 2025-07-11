@@ -61,91 +61,94 @@ class GenVeg(Component, PlantGrowth):
         self.dt = dt
         self.start_date = current_day
         self.time_ind = 0
-        # self.neighbors=self._grid.looped_neighbors_at_cell()
         self.nodes = self._grid.node_at_cell
         _current_jday = self._calc_current_jday()
         rel_time = self._calc_rel_time()
-        # Create empty array to store PlantGrowth objects
-        plantspecies = []
+        # Add required grid fields to store GenVeg data
         _ = self._grid.add_zeros("vegetation__total_biomass", at="cell", clobber=True)
         _ = self._grid.add_zeros("vegetation__n_plants", at="cell", clobber=True)
         _ = self._grid.add_zeros("vegetation__plant_height", at="cell", clobber=True)
         _ = self._grid.add_zeros("vegetation__lai", at="cell", clobber=True)
-        """
-        This is being instantiated incorrectly. We need to check the kwarg for a list containing
-        the plant arrays and then instantiate if it doesn't exist
-        """
-        # Instantiate a PlantGrowth object and
-        # summarize number of plants and biomass per cell
-        if plant_array.size == 0:
-            cover_allocation = []
-            for cell_index in range(self._grid.number_of_cells):
-                species_list = self._grid.at_cell["vegetation__plant_species"][
-                    cell_index
-                ]
-                species_list = species_list[~np.isin(species_list, "null")]
-                species_list = species_list[np.unique(species_list, return_index=True)]
-                cell_cover = self._grid.at_cell["vegetation__cover_fraction"][
-                    cell_index
-                ]
-                number_of_species = len(species_list)
-                cover_species = rng.uniform(low=0.5, high=1.0, size=number_of_species)
-                cover_sum = sum(cover_species)
-                species_cover_allocation = cover_species / cover_sum
-                cover_allocation.append(
-                    dict(zip(species_list, (species_cover_allocation * cell_cover)))
-                )
-
-            # for each species in the parameters file
-            for species in vegparams:
-                if species == "null":
-                    continue
-                species_dict = vegparams[species]
-                species_obj = PlantGrowth(
-                    self._grid,
-                    self.dt,
-                    _current_jday,
-                    rel_time,
-                    species_dict,
-                    species_cover=cover_allocation,
-                )
-                plantspecies.append(species_obj)
+        # Determine how to instantiate GenVeg based on data available
+        if "plant_arrays" in kwargs:
+            plant_arrays = kwargs["plant_arrays"]
+            plantspecies = self._init_from_plant_arrays(vegparams, plant_arrays, _current_jday, rel_time)
         else:
-            for species in vegparams:
-                plant_array = plant_array[plant_array["species"] == species]
-                species_dict = vegparams[species]
-                species_canopy_area = np.pi / 4 * plant_array["shoot_sys_width"] ** 2
-                species_basal_area = np.pi / 4 * plant_array["basal_dia"] ** 2
-                species_abg_area = np.sqrt(species_basal_area * species_canopy_area)
-                species_percent_cover = (
-                    self.calculate_grid_vars(
-                        plant_array["cell_index"], species_abg_area
-                    )
-                    / self._grid.area_of_cell
-                )
-                species_cover = [
-                    dict(
-                        zip(
-                            [self._grid.at_cell["vegetation__plant_species"][i]],
-                            [species_percent_cover[i]],
-                        )
-                    )
-                    for i in range(self._grid.number_of_cells)
-                ]
-
-                species_obj = PlantGrowth(
-                    self._grid,
-                    self.dt,
-                    _current_jday,
-                    rel_time,
-                    species_dict,
-                    species_cover=species_cover,
-                    plant_array=plant_array,
-                )
-                plantspecies.append(species_obj)
+            try:
+                grid_species = self._grid.at_cell["vegetation__plant_species"]
+                cover_frac = self._grid.at_cell["vegetation__cover_fraction"]
+                cover_allocation = self._init_cover_allocation(grid_species, cover_frac)
+                plantspecies = self._init_from_cover_allocation(vegparams, cover_allocation, _current_jday, rel_time)
+            except KeyError:
+                msg = "GenVeg requires pre-populated plant arrays or Landlab cell fields vegetation__cover_fraction and vegetation__plant_species."
+                raise ValueError(msg)
         self.plant_species = plantspecies
-
+        self._add_plant_locations()
         # Summarize biomass and number of plants across grid
+        self.update_grid_fields()
+
+    def _init_cover_allocation(self, grid_species, cover_frac):
+        # Determine cover allocation between species
+        # summarize number of plants and biomass per cell
+        species_list_all = np.unique(grid_species)
+        species_list = np.delete(species_list_all, np.where(species_list_all == "null"))
+        cover_allocation = {}
+        for species in species_list:
+            cover_allocation[species] = np.empty_like(cover_frac)
+        for cell_index in range(self._grid.number_of_cells):
+            cell_species_list = grid_species[
+                cell_index
+            ]
+            # Clean up species list
+            if isinstance(cell_species_list, str):
+                cell_species_list = [cell_species_list]
+            cell_species_list = [s for s in cell_species_list if s != "null"]
+            cell_cover = cover_frac[cell_index]
+            number_of_species = len(cell_species_list)
+            if number_of_species > 0:  # Handle cells with no species
+                cover_species = rng.uniform(low=0.5, high=1.0, size=number_of_species)
+                cover_sum = np.sum(cover_species)  # Use NumPy's sum for efficiency
+                species_cover_allocation = cover_species / cover_sum
+                for i, species in enumerate(cell_species_list):
+                    cover_allocation[species][cell_index] = (species_cover_allocation[i] * cell_cover)
+            else:
+                for species in cell_species_list:
+                    cover_allocation[species][cell_index] = 0.0  # Empty dict if no species in the cell
+        return cover_allocation
+
+    def _init_from_cover_allocation(self, vegparams, cover_allocation, _current_jday, rel_time):
+        plantspecies = []
+        for species in vegparams:
+            if species == "null":
+                continue
+            species_dict = vegparams[species]
+            species_obj = PlantGrowth(
+                self._grid,
+                self.dt,
+                _current_jday,
+                rel_time,
+                species_dict,
+                species_cover=cover_allocation[species],
+            )
+            plantspecies.append(species_obj)
+        return plantspecies
+
+    def _init_from_plant_arrays(self, vegparams, plant_arrays, _current_jday, rel_time):
+        plantspecies = []
+        for species in vegparams:
+            species_dict = vegparams[species]
+            species_obj = PlantGrowth(
+                self._grid,
+                self.dt,
+                _current_jday,
+                rel_time,
+                species_dict,
+                plant_array=plant_arrays[species],
+            )
+            plantspecies.append(species_obj)
+        return plantspecies
+
+    def update_grid_fields(self):
         all_plants = self.combine_plant_arrays()
         tot_bio_species = (
             all_plants["root_biomass"]
@@ -157,7 +160,6 @@ class GenVeg(Component, PlantGrowth):
             all_plants["cell_index"], tot_bio_species
         )
         cell_plant_count = self.calculate_grid_vars(all_plants["cell_index"])
-
         frac_cover = (
             self.calculate_grid_vars(
                 all_plants["cell_index"],
@@ -179,7 +181,6 @@ class GenVeg(Component, PlantGrowth):
         plant_height[cells_with_plants] = (
             sum_plant_height[cells_with_plants] / n_of_plants[cells_with_plants]
         )
-
         self._grid.at_cell["vegetation__live_biomass"] = cell_biomass
         self._grid.at_cell["vegetation__plant_count"] = cell_plant_count
         self._grid.at_cell["vegetation__cover_fraction"] = frac_cover
@@ -188,7 +189,8 @@ class GenVeg(Component, PlantGrowth):
             cell_leaf_area / self._grid.area_of_cell
         )
 
-        # add location information for each plant
+    def _add_plant_locations(self):
+        all_plants = self.combine_plant_arrays()
         for cell_index in range(self._grid.number_of_cells):
             cell_corners = self._grid.corners_at_cell[cell_index]
             x_vertices = self._grid.x_of_corner[cell_corners]
@@ -359,8 +361,13 @@ class GenVeg(Component, PlantGrowth):
                     soil_texture_defaults["field_capacity"].get
                 )("silt loam")
 
-    def get_int_output(self):
+    def get_interim_output(self):
+        plant_arrays = {}
+        for species_obj in self.plant_species:
+            species = species_obj.species_name
+            plant_arrays[species] = species_obj.plants
         print(self.species_cover_allocation)
+        return plant_arrays
 
     def run_one_step(self):
         _current_jday = self._calc_current_jday()

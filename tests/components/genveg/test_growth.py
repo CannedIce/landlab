@@ -1,8 +1,9 @@
 import numpy as np
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_array_less
+from unittest import mock
 
 
-def test__init__methods_run(growth_obj, example_plant_array):
+def test__init_methods_run_with_array(growth_obj, example_plant_array):
     # Test to make sure this gets init plant array or loads
     # species cover properly
     # Init: creates plants, initialize plants, calculates n_plants,
@@ -29,28 +30,42 @@ def test__init__methods_run(growth_obj, example_plant_array):
             for sub_name in dispersal_subs:
                 assert_allclose(init_array["dispersal"][sub_name][~init_array["dispersal"][sub_name].mask], np.ravel(example_plant_array["dispersal"][sub_name]))
     pd_out = growth_obj.record_plants.dataset.to_dataframe()
-    columns = list(pd_out.columns)
-    array_columns = [
-        "cell",
-        "cell_index",
-        "species",
-        "root",
-        "leaf",
-        "stem",
-        "reproductive",
-        "dead_root",
-        "dead_leaf",
-        "dead_stem",
-        "dead_reproductive",
-        "shoot_sys_width",
-        "total_leaf_area",
-        "plant_age"
-    ]
-    col_map = zip(columns, array_columns)
-    for pd_col, array_col in col_map:
+    col_map = {
+        "species": "vegetation__species",
+        "root": "vegetation__root_biomass",
+        "leaf": "vegetation__leaf_biomass",
+        "stem": "vegetation__stem_biomass",
+        "reproductive": "vegetation__repro_biomass",
+        "dead_root": "vegetation__dead_root_biomass",
+        "dead_leaf": "vegetation__dead_leaf_biomass",
+        "dead_stem": "vegetation__dead_stem_biomass",
+        "dead_reproductive": "vegetation__dead_repro_biomass",
+        "total_leaf_area": "vegetation__total_leaf_area",
+        "live_leaf_area": "vegetation__live_leaf_area",
+        "shoot_sys_width": "vegetation__shoot_sys_diameter",
+        "basal_dia": "vegetation__basal_diameter",
+        "shoot_sys_height": "vegetation__plant_height",
+        "root_sys_width": "vegetation__root_sys_diameter",
+        "root_sys_depth": "vegetation__root_depth",
+        "plant_age": "vegetation__plant_age",
+        "n_stems": "vegetation__stem_count"
+    }
+    for array_col, pd_col in col_map.items():
         if pd_col not in special_handling:
             assert_allclose(pd_out[pd_col].to_numpy(), example_plant_array[array_col])
     assert growth_obj.n_plants == 8
+
+
+def test__init_plants_from_grid(cover_growth_obj):
+    # Test to make sure this gets init plant array or loads
+    # species cover properly
+    # Init: creates plants, initialize plants, calculates n_plants,
+    # creates data record of plants
+    array = cover_growth_obj._init_plants_from_grid(True, np.ones_like(cover_growth_obj._grid.at_cell["vegetation__cover_fraction"]))
+    basal_dias = array["basal_dia"]
+    occupied_area = np.sum(basal_dias**2 * np.pi / 4)
+    area_left = cover_growth_obj._grid.area_of_cell[0] * 0.907 - occupied_area
+    assert area_left < (1.2 * cover_growth_obj.species_morph_params["basal_dia"]["min"])
 
 
 def test_species_plants(growth_obj, example_plant_array):
@@ -109,14 +124,6 @@ def test_add_new_plants(growth_obj, example_plant_array, example_plant):
 def test_grow(growth_obj, example_plant, one_cell_grid):
     # Save this for last - consider mocking up results for singular days under
     # different logical circumstances
-    pass
-
-
-def test__init_plants_from_grid(growth_obj, one_cell_grid):
-    # Test to make sure we populate based on species cell cover
-    # if no plant array available
-    # n plants with constant basal diameter fit known
-    # plants with too big basal diameter don't fit
     pass
 
 
@@ -202,6 +209,26 @@ def test_save_plant_output(growth_obj, example_plant_array):
     # Make sure this works if we add new plants
     rel_time = 200
     gro_obj = growth_obj
-    gro_obj.save_plant_output(rel_time, "var")
+    gro_obj.save_plant_output(
+        rel_time, [
+            "dead_root",
+            "dead_leaf",
+            "dead_stem",
+            "dead_reproductive",
+            "total_leaf_area",
+            "live_leaf_area",
+            "shoot_sys_width",
+            "basal_dia",
+            "shoot_sys_height",
+            "root_sys_width",
+            "root_sys_depth",
+            "plant_age",
+            "n_stems",
+        ]
+    )
     pd_out = gro_obj.record_plants.dataset.to_dataframe()
     assert pd_out.index[-1][0] == rel_time
+    columns = list(pd_out.columns)
+    for col_name in columns:
+        for plant in range(8):
+            assert pd_out.loc[194, plant][col_name] == pd_out.loc[200, plant][col_name]

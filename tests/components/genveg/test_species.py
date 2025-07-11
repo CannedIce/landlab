@@ -187,12 +187,12 @@ def test_set_initial_cover(species_object):
     plantlist = []
     # Cover area is too small for any plants
     cover_area = 0.00001
-    plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+    pidval, plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
     assert len(plantlist) == 0
     assert pidval == 0
     # Correct dimension is populated
     cover_area = 0.2
-    plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+    pidval, plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
     basal_dias = plantlist[0][18]
     assert basal_dias > 0
     # Area being used properly

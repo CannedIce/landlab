@@ -161,7 +161,7 @@ def example_input_params():
                     "mean": 3,
                     "min": 1,
                 },
-                "max_plant_density": 18,
+                "max_plant_density": 25,
                 "shoot_sys_width": {
                     "max": np.array([0.3]),
                     "mean": np.array([0.12]),
@@ -489,10 +489,18 @@ def one_cell_grid():
         at="cell",
         units="W/m^2",
     )
+    plant_list = [['BTS']]
     _ = grid.add_field(
         "vegetation__plant_species",
-        np.full(grid.number_of_cells, "Corn"),
+        np.random.default_rng().choice(plant_list, grid.number_of_cells),
         at="cell",
+        units="g",
+    )
+    _ = grid.add_field(
+        "vegetation__cover_fraction",
+        np.ones(grid.number_of_cells),
+        at="cell",
+        units="sq m/sq m"
     )
     _ = grid.add_field(
         "vegetation__total_biomass",
@@ -540,8 +548,15 @@ def two_cell_grid():
     )
     _ = grid.add_field(
         "vegetation__plant_species",
-        np.full(grid.number_of_cells, "Corn"),
+        np.full(grid.number_of_cells, ["Corn"]),
         at="cell",
+        units="list of strings"
+    )
+    _ = grid.add_field(
+        "vegetation__cover_fraction",
+        np.ones(grid.number_of_cells),
+        at="cell",
+        units="sq m/sq m"
     )
     _ = grid.add_field(
         "vegetation__total_biomass",
@@ -691,13 +706,36 @@ def growth_obj(one_cell_grid, example_input_params, example_plant_array):
 
 
 @pytest.fixture
+def cover_growth_obj(one_cell_grid, example_input_params):
+    mod_input_params = example_input_params
+    mod_input_params["BTS"]["morph_params"]["basal_dia"]["min"] = 0.3568
+    mod_input_params["BTS"]["morph_params"]["basal_dia"]["max"] = 0.3569
+    dt = np.timedelta64(1, 'D')
+    jday = 195
+    rel_time = 194
+    cover = np.ones_like(one_cell_grid.at_cell["vegetation__cover_fraction"])
+    yield PlantGrowth(
+        one_cell_grid,
+        dt,
+        rel_time,
+        jday,
+        species_params=mod_input_params["BTS"],
+        species_cover=cover
+    )
+
+
+@pytest.fixture
 def genveg_obj(one_cell_grid, example_input_params, example_plant_array):
+    plant_array = example_plant_array
     dt = np.timedelta64(1, 'D')
     current_day = np.datetime64("2019-07-14", "D")
+    input_plant_array = {
+        "BTS": plant_array
+    }
     yield GenVeg(
         one_cell_grid,
         dt,
         current_day,
         example_input_params,
-        plant_array=example_plant_array
+        plant_arrays=input_plant_array
     )

@@ -274,13 +274,11 @@ class Species:
             "random": Random(species_params, cell_area, extent, reference)
         }
         dispersal_classes = []
-
         for mode in repro_modes:
             if mode in repro_options:
                 dispersal_classes.append(repro_options[mode])
             else:
                 print(f"Warning: Invalid reproductive mode '{mode}'. Skipping.")
-
         return dispersal_classes
 
     def select_habit_class(self, species_params):
@@ -781,7 +779,6 @@ class Species:
         return self.habit.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
 
     def set_initial_biomass(self, plants, in_growing_season):
-        # I think we just need to figure out how to make leaf area = 0 for decid shrubs
         est_abg_biomass = self.habit.estimate_abg_biomass_from_cover(plants)
         total_biomass = np.interp(
             est_abg_biomass,
