@@ -9,13 +9,16 @@ def test__init_methods_run_with_array(growth_obj, example_plant_array):
     # Init: creates plants, initialize plants, calculates n_plants,
     # creates data record of plants
     init_array = growth_obj.plants
+    n_plants = np.count_nonzero(init_array["pid"]) + 1
+    print("nonzero plants")
+    print(n_plants)
     col_names = example_plant_array.dtype.names
     special_handling = ["species", "dispersal", "grid_element", "vegetation__species"]
     for name in col_names:
         if name not in special_handling:
-            assert_allclose(init_array[name][~init_array[name].mask], example_plant_array[name])
+            assert_allclose(init_array[name][:n_plants], example_plant_array[name])
         elif name == "species":
-            assert np.all(init_array[name]) == np.all(example_plant_array[name])
+            assert np.all(init_array[name][:n_plants]) == np.all(example_plant_array[name])
         else:
             dispersal_subs = [
                 "pup_x_loc",
@@ -28,7 +31,7 @@ def test__init_methods_run_with_array(growth_obj, example_plant_array):
                 "rand_y_loc"
             ]
             for sub_name in dispersal_subs:
-                assert_allclose(init_array["dispersal"][sub_name][~init_array["dispersal"][sub_name].mask], np.ravel(example_plant_array["dispersal"][sub_name]))
+                assert_allclose(init_array[:n_plants]["dispersal"][sub_name], example_plant_array["dispersal"][sub_name])
     pd_out = growth_obj.record_plants.dataset.to_dataframe()
     col_map = {
         "species": "vegetation__species",
@@ -61,6 +64,7 @@ def test__init_plants_from_grid(cover_growth_obj):
     # species cover properly
     # Init: creates plants, initialize plants, calculates n_plants,
     # creates data record of plants
+    print(cover_growth_obj.species_morph_params["basal_dia"]["min"])
     array = cover_growth_obj._init_plants_from_grid(True, np.ones_like(cover_growth_obj._grid.at_cell["vegetation__cover_fraction"]))
     basal_dias = array["basal_dia"]
     occupied_area = np.sum(basal_dias**2 * np.pi / 4)
@@ -71,13 +75,14 @@ def test__init_plants_from_grid(cover_growth_obj):
 def test_species_plants(growth_obj, example_plant_array):
     # Test to make sure this returns the plant array
     plant_out = growth_obj.species_plants()
+    n_plants = np.count_nonzero(plant_out["pid"]) + 1
     col_names = example_plant_array.dtype.names
     special_handling = ["species", "dispersal"]
     for name in col_names:
         if name not in special_handling:
-            assert_allclose(plant_out[name], example_plant_array[name])
+            assert_allclose(plant_out[name][:n_plants], example_plant_array[name])
         elif name == "species":
-            assert np.all(plant_out[name]) == np.all(example_plant_array[name])
+            assert np.all(plant_out[name][:n_plants]) == np.all(example_plant_array[name])
         else:
             dispersal_subs = [
                 "pup_x_loc",
@@ -90,7 +95,7 @@ def test_species_plants(growth_obj, example_plant_array):
                 "rand_y_loc"
             ]
             for sub_name in dispersal_subs:
-                assert_allclose(plant_out["dispersal"][sub_name], example_plant_array["dispersal"][sub_name])
+                assert_allclose(plant_out[:n_plants]["dispersal"][sub_name], example_plant_array["dispersal"][sub_name])
 
 
 def test_update_plants(growth_obj, example_plant_array):
@@ -115,10 +120,26 @@ def test_add_new_plants(growth_obj, example_plant_array, example_plant):
     # Should update array and record
     rel_time = 28
     array_out = growth_obj.add_new_plants(example_plant, rel_time)
-    n_plants = array_out["root"].count()
+    n_plants = growth_obj.n_plants
+    array_count = np.count_nonzero(array_out["pid"]) + 1
     assert n_plants == (example_plant_array.size + 1)
+    assert array_count == (example_plant_array.size + 1)
     record = growth_obj.record_plants.number_of_items
     assert record == (example_plant_array.size + 1)
+
+
+def test_add_new_plants_increase_array_size(growth_obj, example_plant_array):
+    rel_time = 28
+    max_plants = growth_obj.max_plants.copy()
+    current_plants = growth_obj.n_plants
+    num_empty = max_plants - current_plants
+    array_add = example_plant_array.size
+    iterations = np.ceil((num_empty / array_add)).astype(int)
+    gro_obj = growth_obj
+    for i in range(iterations[0] + 1):
+        gro_obj.plants = gro_obj.add_new_plants(example_plant_array, rel_time)
+    new_max_plants = gro_obj.max_plants
+    assert new_max_plants == (2 * max_plants)
 
 
 def test_grow(growth_obj, example_plant, one_cell_grid):
@@ -199,9 +220,9 @@ def test_remove_plants(growth_obj):
     gro_obj.plants["dead_reproductive"][0] = 0.01
     min_biomass = gro_obj.species_grow_params["plant_part_min"]
     gro_obj.species_grow_params["min_growth_biomass"] = min_biomass["root"] + min_biomass["stem"] + min_biomass["leaf"]
-    plants_out, n_plants = gro_obj.remove_plants()
-    assert n_plants == 7
-    assert plants_out.mask[0]["pid"]
+    gro_obj.remove_plants()
+    assert gro_obj.n_plants == 7
+    assert gro_obj.plants["pid"][0] == 1  # what am i testing here?
 
 
 def test_save_plant_output(growth_obj, example_plant_array):

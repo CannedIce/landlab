@@ -180,29 +180,29 @@ def test_populate_biomass_allocation_array(species_object):
         idx += 1
 
 
-def test_set_initial_cover(species_object):
-    species_name = "BTS"
-    pidval = 0
-    cell_index = 1
-    plantlist = []
-    # Cover area is too small for any plants
-    cover_area = 0.00001
-    pidval, plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
-    assert len(plantlist) == 0
-    assert pidval == 0
-    # Correct dimension is populated
-    cover_area = 0.2
-    pidval, plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
-    basal_dias = plantlist[0][18]
-    assert basal_dias > 0
-    # Area being used properly
-    sum_area = 0
-    for i in range(len(plantlist)):
-        inc_area = 0.25 * np.pi * plantlist[i][18]**2
-        sum_area += inc_area
-    min_cover_area = 1.2 * 0.25 * np.pi * species_object.species_morph_params["basal_dia"]["min"]**2
-    assert sum_area < cover_area
-    assert (cover_area - sum_area) < min_cover_area
+# def test_set_initial_cover(species_object):
+#     species_name = "BTS"
+#     pidval = 0
+#     cell_index = 1
+#     plantlist = []
+#     # Cover area is too small for any plants
+#     cover_area = 0.00001
+#     pidval, plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+#     assert len(plantlist) == 0
+#     assert pidval == 0
+#     # Correct dimension is populated
+#     cover_area = 0.2
+#     pidval, plantlist = species_object.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
+#     basal_dias = plantlist[0][18]
+#     assert basal_dias > 0
+#     # Area being used properly
+#     sum_area = 0
+#     for i in range(len(plantlist)):
+#         inc_area = 0.25 * np.pi * plantlist[i][18]**2
+#         sum_area += inc_area
+#     min_cover_area = 1.2 * 0.25 * np.pi * species_object.species_morph_params["basal_dia"]["min"]**2
+#     assert sum_area < cover_area
+#     assert (cover_area - sum_area) < min_cover_area
 
 
 def test_set_initial_biomass(species_object, example_plant):

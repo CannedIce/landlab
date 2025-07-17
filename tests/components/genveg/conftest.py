@@ -707,9 +707,10 @@ def growth_obj(one_cell_grid, example_input_params, example_plant_array):
 
 @pytest.fixture
 def cover_growth_obj(one_cell_grid, example_input_params):
-    mod_input_params = example_input_params
-    mod_input_params["BTS"]["morph_params"]["basal_dia"]["min"] = 0.3568
-    mod_input_params["BTS"]["morph_params"]["basal_dia"]["max"] = 0.3569
+    # These are not modifying!!!
+    mod_input_params = example_input_params["BTS"]
+    mod_input_params["morph_params"]["basal_dia"]["min"] = 0.3568
+    mod_input_params["morph_params"]["basal_dia"]["max"] = 0.3569
     dt = np.timedelta64(1, 'D')
     jday = 195
     rel_time = 194
@@ -719,7 +720,7 @@ def cover_growth_obj(one_cell_grid, example_input_params):
         dt,
         rel_time,
         jday,
-        species_params=mod_input_params["BTS"],
+        species_params=mod_input_params,
         species_cover=cover
     )
 

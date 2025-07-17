@@ -199,47 +199,7 @@ class PlantGrowth(Species):
             * self.species_morph_params["max_plant_density"]
             * self._grid.area_of_cell
         ).astype(int)
-        print("Max plants")
-        print(max_plants)
-        self.no_data_scalar = (
-            "N/A",
-            999999,
-            999999,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            np.nan,
-            999999,
-            (
-                np.nan,
-                np.nan,
-                np.nan,
-                [np.nan],
-                [np.nan],
-                np.nan,
-                [np.nan],
-                [np.nan],
-            ),
-            999999,
-        )
+        self.max_plants = max_plants * 2
         self.dtypes = [
             ("species", "U10"),
             ("pid", int),
@@ -279,15 +239,7 @@ class PlantGrowth(Species):
             ]),
             ("item_id", int),
         ]
-        mask_scalar = 1
-        empty_list = []
-        mask = []
-        for _ in range(max_plants[0]):
-            empty_list.append(self.no_data_scalar)
-            mask.append(mask_scalar)
-        self.plants = np.ma.array(empty_list, mask=mask, dtype=self.dtypes)
-        self.plants[:] = self.no_data_scalar
-        self.plants[:] = np.ma.masked
+        self.plants = np.empty(self.max_plants, dtype=self.dtypes)
         species_cover = kwargs.get(
             "species_cover",
             np.zeros_like(self._grid["cell"]["vegetation__total_biomass"])
@@ -302,10 +254,8 @@ class PlantGrowth(Species):
         except KeyError:
             msg = "GenVeg requires a pre-populated plant array or a species cover."
             raise ValueError(msg)
-        self.n_plants = init_plants.size
-        self.plants[: self.n_plants] = init_plants
-
-        self.call = []
+        self.n_plants = np.count_nonzero(init_plants["pid"]) + 1  # add 1 to account for pid=0
+        self.plants[: self.n_plants] = init_plants[: self.n_plants]
         # Create empty Datarecord to store plant data
         # Instantiate data record
         data_vars = {}
@@ -349,30 +299,41 @@ class PlantGrowth(Species):
         self.plants["item_id"][: self.n_plants] = self.record_plants.item_coordinates
 
     def species_plants(self):
-        unmasked_rows = np.nonzero(self.plants["pid"] != 999999)
-        return self.plants[unmasked_rows]
+        return self.plants
 
     def update_plants(self, var_names, pids, var_vals, subarray=None):
+        print("update these pids")
+        print(pids)
+        print("pids in plant array")
+        print(self.plants["pid"])
         if subarray is None:
             for idx, var_name in enumerate(var_names):
-                self.plants[var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
+                self.plants[:self.n_plants][var_name][np.isin(self.plants["pid"][:self.n_plants], pids)] = var_vals[idx]
             return self.plants
         else:
             for idx, var_name in enumerate(var_names):
-                self.plants[subarray][var_name][np.isin(self.plants["pid"], pids)] = var_vals[idx]
+                self.plants[:self.n_plants][subarray][var_name][np.isin(self.plants["pid"][:self.n_plants], pids)] = var_vals[idx]
             return self.plants
 
     def add_new_plants(self, new_plants_list, _rel_time):
         # Reassess this. We need the INDEX of the last nanmax PID
-        last_pid = np.ma.max(self.plants["pid"])
+        last_pid = np.max(self.plants["pid"])
+        last_index = np.flatnonzero(self.plants["pid"] == last_pid).astype(int)
+        (n_new_plants,) = new_plants_list.shape
+        # Enlarge plant array if necessary
+        if ((n_new_plants + last_index + 1) > self.max_plants):
+            self.max_plants *= 2
+            enlarged_plants = np.empty(self.max_plants, dtype=self.dtypes)
+            enlarged_plants[:self.n_plants] = self.plants
+            self.plants = enlarged_plants
         pids = np.arange(last_pid + 1, last_pid + 1 + new_plants_list.size)
         new_plants_list["pid"] = pids
         new_plants_list["item_id"] = pids
-        (n_new_plants,) = new_plants_list.shape
-        start_index = np.flatnonzero(self.plants["pid"] == last_pid).astype(int) + 1
+        start_index = last_index + 1
         end_index = n_new_plants + start_index[0]
         self.plants[start_index[0] : end_index] = new_plants_list
         self.n_plants += n_new_plants
+        #check this against new approach
         self.record_plants.add_item(
             time=np.array([_rel_time]),
             new_item={
@@ -480,9 +441,8 @@ class PlantGrowth(Species):
         # them in order to update the plant array.
 
         # set up shorthand aliases and reset
-        # look at checking to see if we can use recordmask here
-        _last_biomass = self.plants[~self.plants["pid"].mask].copy()
-        _new_biomass = self.plants[~self.plants["pid"].mask]
+        _last_biomass = self.plants.copy()
+        _new_biomass = self.plants
         # Decide what processes happen today
         event_flags = self.set_event_flags(_current_jday)
         processes = {
@@ -551,8 +511,8 @@ class PlantGrowth(Species):
         _new_biomass[filter] = _new_live_biomass
         _new_biomass = self.update_dead_biomass(_new_biomass, _last_biomass)
         _new_biomass = self.update_morphology(_new_biomass)
-        self.plants[~self.plants["pid"].mask] = _new_biomass
-        self.plants, self.n_plants = self.remove_plants()
+        self.plants = _new_biomass
+        self.remove_plants()
 
     def _init_plants_from_grid(self, in_growing_season, species_cover):
         """
@@ -573,7 +533,7 @@ class PlantGrowth(Species):
                 cell_cover * self._grid.area_of_cell[cell_index] * 0.907
             )
             pidval, init_plants = self.set_initial_cover(cover_area, species, pidval, cell_index, init_plants)
-        init_plants = self.set_initial_biomass(init_plants, in_growing_season)
+        #init_plants = self.set_initial_biomass(init_plants, in_growing_season)
         return init_plants
 
     def set_event_flags(self, _current_jday):
@@ -635,16 +595,15 @@ class PlantGrowth(Species):
         # are removed from the plant array and no longer tracked.
         min_size_dead = 0.1
         min_size_live = self.species_grow_params["min_growth_biomass"]
-        total_live_biomass = self.sum_plant_parts(self.plants, parts="growth")
-        total_dead_biomass = self.sum_plant_parts(self.plants, parts="dead")
-        remove_plants = np.flatnonzero(
-            (total_dead_biomass < min_size_dead) & (total_live_biomass < min_size_live)
-        )
-        self.plants[remove_plants] = self.no_data_scalar
-        self.plants[remove_plants] = np.ma.masked
-        remove_array_length = np.size(remove_plants)
+        active_plants = self.plants[:self.n_plants]
+        total_live_biomass = self.sum_plant_parts(active_plants, parts="growth")
+        total_dead_biomass = self.sum_plant_parts(active_plants, parts="dead")
+        remove_mask = (total_dead_biomass < min_size_dead) & (total_live_biomass < min_size_live)
+        remove_plants = np.where(remove_mask)[0]
+        self.plants = np.delete(self.plants, remove_plants)
+        remove_array_length = len(remove_plants)
         self.n_plants -= remove_array_length
-        return self.plants, self.n_plants
+        self.max_plants -= remove_array_length
 
     def save_plant_output(self, rel_time, opt_save_vars):
         """
@@ -661,11 +620,11 @@ class PlantGrowth(Species):
         self.record_plants.ffill_grid_element_and_id()
         save_vars = ["species", "root", "leaf", "stem", "reproductive"]
         save_vars.extend(opt_save_vars)
-        item_ids = self.plants["item_id"][~self.plants["item_id"].mask]
+        item_ids = self.plants["item_id"][:self.n_plants]
         for var in save_vars:
             print(var)
             print(self.variable_map[var])
             self.record_plants.dataset[self.variable_map[var]].values[
                 item_ids, self.time_ind
-            ] = self.plants[var][~self.plants["item_id"].mask]
+            ] = self.plants[var][:self.n_plants]
         self.time_ind += 1

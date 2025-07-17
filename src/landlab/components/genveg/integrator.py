@@ -217,8 +217,8 @@ class GenVeg(Component, PlantGrowth):
                             [point], [radius], cell_plants, "above"
                         )
                         if (unoccupied_center is True) or (idx == 0):
-                            cell_plants[idx]["x_loc"] = x
-                            cell_plants[idx]["y_loc"] = y
+                            cell_plants[idx]["x_loc"] = x[0]
+                            cell_plants[idx]["y_loc"] = y[0]
                             break
 
             for species_obj in self.plant_species:

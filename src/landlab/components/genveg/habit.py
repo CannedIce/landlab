@@ -265,6 +265,8 @@ class Graminoid(Habit):
         # Randomly creates a percent cover
         plant_cover = []
         min_cover_area = 1.2 * self._calc_canopy_area_from_shoot_width(self.morph_params["basal_dia"]["min"])
+        print(self.morph_params["basal_dia"]["min"])
+        print(self.morph_params["basal_dia"]["max"])
         while cover_area > min_cover_area:
             basal_dia = rng.uniform(
                 low=self.morph_params["basal_dia"]["min"],
@@ -277,8 +279,11 @@ class Graminoid(Habit):
             if cover_area > plant_area:
                 plant_cover.append(basal_dia)
                 cover_area -= plant_area
+        print("Cell_index")
+        print(cell_index)
+        print("Plant cover list length")
+        print(len(plant_cover))
         for new_plant_width in plant_cover:
-            #plantlist.append(
             plant_array[pidval] = (
                 species_name,
                 pidval,
@@ -318,9 +323,9 @@ class Graminoid(Habit):
                 ),
                 0,
             )
-            #)
-
             pidval += 1
+        print("end pidval")
+        print(pidval)
         return (pidval, plant_array)
 
 
