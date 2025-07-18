@@ -64,7 +64,6 @@ def test__init_plants_from_grid(cover_growth_obj):
     # species cover properly
     # Init: creates plants, initialize plants, calculates n_plants,
     # creates data record of plants
-    print(cover_growth_obj.species_morph_params["basal_dia"]["min"])
     array = cover_growth_obj._init_plants_from_grid(True, np.ones_like(cover_growth_obj._grid.at_cell["vegetation__cover_fraction"]))
     basal_dias = array["basal_dia"]
     occupied_area = np.sum(basal_dias**2 * np.pi / 4)

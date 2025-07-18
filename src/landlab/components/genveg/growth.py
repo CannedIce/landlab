@@ -529,11 +529,12 @@ class PlantGrowth(Species):
         for cell_index in range(self._grid.number_of_cells):
             species = self.species_plant_factors["species"]
             cell_cover = species_cover[cell_index]
+            # Total cover area reduced to account for imperfect packing
             cover_area = (
                 cell_cover * self._grid.area_of_cell[cell_index] * 0.907
             )
             pidval, init_plants = self.set_initial_cover(cover_area, species, pidval, cell_index, init_plants)
-        #init_plants = self.set_initial_biomass(init_plants, in_growing_season)
+        init_plants = self.set_initial_biomass(init_plants, in_growing_season)
         return init_plants
 
     def set_event_flags(self, _current_jday):

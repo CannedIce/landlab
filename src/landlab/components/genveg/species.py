@@ -774,7 +774,7 @@ class Species:
         plants = self.update_dead_biomass(plants, old_biomass)
         return plants
 
-    def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plantlist):
+    def set_initial_cover(self, cover_area: float, species_name: str, pidval: int, cell_index: int, plantlist: list):
         # Randomly creates a percent cover
         return self.habit.set_initial_cover(cover_area, species_name, pidval, cell_index, plantlist)
 

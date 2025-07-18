@@ -111,7 +111,7 @@ class Habit:
         plants = self.duration.senesce(plants, ns_green_mass, persistent_mass)
         return plants
 
-    def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plant_array):
+    def set_initial_cover(self, cover_area: float, species_name: str, pidval: int, cell_index: int, plant_array: np.ndarray):
         # Randomly creates a percent cover
         plant_cover = []
         min_cover_area = 1.2 * self._calc_canopy_area_from_shoot_width(self.morph_params["shoot_sys_width"]["min"])
@@ -128,48 +128,13 @@ class Habit:
             if cover_area > plant_canopy_area:
                 plant_cover.append(shoot_sys_width)
                 cover_area -= plant_canopy_area
-        for new_plant_width in plant_cover:
-            plant_array[pidval] = (
-                species_name,
-                pidval,
-                cell_index,
-                np.nan,
-                np.nan,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                new_plant_width,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0,
-                (
-                    np.nan,
-                    np.nan,
-                    np.nan,
-                    [np.nan],
-                    [np.nan],
-                    np.nan,
-                    [np.nan],
-                    [np.nan],
-                ),
-                0,
-            )
-            pidval += 1
-        return plant_array
+                num_elements = len(plant_cover)
+        end_pidval = (pidval + num_elements)
+        plant_array["shoot_sys_width"][pidval: end_pidval] = np.array(plant_cover).flatten()
+        plant_array["species"][pidval: end_pidval] = np.repeat(species_name, num_elements)
+        plant_array["pid"][pidval: end_pidval] = np.arange(pidval, end_pidval)
+        plant_array["cell_index"][pidval: end_pidval] = np.repeat(cell_index, num_elements)
+        return (end_pidval, plant_array)
 
     def set_initial_biomass(self, plants, in_growing_season):
         plants = self.duration.set_initial_biomass(plants, in_growing_season)
@@ -263,10 +228,9 @@ class Graminoid(Habit):
 
     def set_initial_cover(self, cover_area, species_name, pidval, cell_index, plant_array):
         # Randomly creates a percent cover
+        # Change this to build list of tuples then convert to small record array with same dtypes
         plant_cover = []
         min_cover_area = 1.2 * self._calc_canopy_area_from_shoot_width(self.morph_params["basal_dia"]["min"])
-        print(self.morph_params["basal_dia"]["min"])
-        print(self.morph_params["basal_dia"]["max"])
         while cover_area > min_cover_area:
             basal_dia = rng.uniform(
                 low=self.morph_params["basal_dia"]["min"],
@@ -279,54 +243,13 @@ class Graminoid(Habit):
             if cover_area > plant_area:
                 plant_cover.append(basal_dia)
                 cover_area -= plant_area
-        print("Cell_index")
-        print(cell_index)
-        print("Plant cover list length")
-        print(len(plant_cover))
-        for new_plant_width in plant_cover:
-            plant_array[pidval] = (
-                species_name,
-                pidval,
-                cell_index,
-                np.nan,
-                np.nan,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                new_plant_width,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0,
-                (
-                    np.nan,
-                    np.nan,
-                    np.nan,
-                    [np.nan],
-                    [np.nan],
-                    np.nan,
-                    [np.nan],
-                    [np.nan],
-                ),
-                0,
-            )
-            pidval += 1
-        print("end pidval")
-        print(pidval)
-        return (pidval, plant_array)
+        num_elements = len(plant_cover)
+        end_pidval = (pidval + num_elements)
+        plant_array["basal_dia"][pidval: end_pidval] = np.array(plant_cover).flatten()
+        plant_array["species"][pidval: end_pidval] = np.repeat(species_name, num_elements)
+        plant_array["pid"][pidval: end_pidval] = np.arange(pidval, end_pidval)
+        plant_array["cell_index"][pidval: end_pidval] = np.repeat(cell_index, num_elements)
+        return (end_pidval, plant_array)
 
 
 class Shrub(Habit):
