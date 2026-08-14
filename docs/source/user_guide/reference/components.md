@@ -60,6 +60,7 @@ following categories of components:
 
 * {mod}`landlab.components.vegetation_dynamics`
 * {mod}`landlab.components.plant_competition_ca`
+* {mod}`landlab.components.genveg`
 
 ## Biota
 
